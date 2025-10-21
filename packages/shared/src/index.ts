@@ -20,5 +20,8 @@ export * from './utils';
 // Export server utilities
 export * from './server';
 
+// Export OLAP utilities (ClickHouse schema generation)
+export * from './olap';
+
 // Re-export commonly used Express types for convenience
 export { Request, Response, NextFunction, Router } from 'express';

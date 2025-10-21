@@ -90,8 +90,31 @@ const serverConfig: ServerConfig = {
 
 const idempotentServer = createIdempotentServer(serverConfig);
 
+// Determine environment
+const isDevelopment = process.env.NODE_ENV !== 'production';
+
+// Helmet options - relaxed CSP for development (Scalar), strict for production
+const devHelmetOptions = {
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://unpkg.com'],
+      styleSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        'https://cdn.jsdelivr.net',
+        'https://fonts.googleapis.com',
+      ],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'", 'https://cdn.jsdelivr.net'],
+      workerSrc: ["'self'", 'blob:'],
+    },
+  },
+};
+
 // Middleware
-app.use(helmet(helmetOptions));
+app.use(helmet(isDevelopment ? devHelmetOptions : helmetOptions));
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(requestContextMiddleware);
@@ -522,6 +545,80 @@ app.delete('/api/order-items/:id', async (req, res, next) => {
 });
 
 // ============================================================================
+// MOOSE OLAP TRANSLATION ENDPOINT
+// ============================================================================
+
+// GET /api/olap/translate - Showcase OLTP to OLAP translation
+app.get('/api/olap/translate', async (req, res, next) => {
+  try {
+    const customerRepo = AppDataSource.getRepository(Customer);
+    const productRepo = AppDataSource.getRepository(Product);
+    const orderItemRepo = AppDataSource.getRepository(OrderItem);
+
+    // Extract OLTP data
+    const customers = await customerRepo.find();
+    const products = await productRepo.find();
+    const orderItems = await orderItemRepo.find({
+      relations: ['order'],
+    });
+
+    // Import translation functions dynamically
+    const {
+      translateCustomersToDimensions,
+      translateProductsToDimensions,
+      translateOrderItemsToSalesFacts,
+    } = await import('../moose-olap/translators');
+
+    // Transform to OLAP format
+    const customerDimensions = translateCustomersToDimensions(customers);
+    const productDimensions = translateProductsToDimensions(products);
+    const salesFacts = translateOrderItemsToSalesFacts(orderItems);
+
+    // Return the translation result
+    sendSuccess(res, {
+      summary: {
+        customersTranslated: customerDimensions.length,
+        productsTranslated: productDimensions.length,
+        salesFactsGenerated: salesFacts.length,
+      },
+      oltp: {
+        customers: customers.slice(0, 2), // Sample
+        products: products.slice(0, 2), // Sample
+        orderItems: orderItems.slice(0, 3), // Sample
+      },
+      olap: {
+        customerDimensions: customerDimensions.slice(0, 2), // Sample
+        productDimensions: productDimensions.slice(0, 2), // Sample
+        salesFacts: salesFacts.slice(0, 3), // Sample
+      },
+      mooseOlapTables: [
+        {
+          table: 'dim_customer',
+          file: 'moose-olap/datamodels/CustomerDimension.ts',
+          engine: 'ReplacingMergeTree()',
+          orderBy: '(id)',
+        },
+        {
+          table: 'dim_product',
+          file: 'moose-olap/datamodels/ProductDimension.ts',
+          engine: 'ReplacingMergeTree()',
+          orderBy: '(id)',
+        },
+        {
+          table: 'fact_sales',
+          file: 'moose-olap/datamodels/SalesFact.ts',
+          engine: 'MergeTree()',
+          orderBy: '(orderDate, customerId, productId)',
+          partitionBy: 'toYYYYMM(orderDate)',
+        },
+      ],
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================================
 // SHARED ROUTES
 // ============================================================================
 
@@ -529,28 +626,31 @@ app.delete('/api/order-items/:id', async (req, res, next) => {
 app.use('/', createRootRoutes(APP_NAME, VERSION));
 app.use('/', createHealthRoutes(APP_NAME, VERSION));
 app.use('/utils', createUtilityRoutes());
-// Add docs route with placeholder URL (will be updated with actual port)
-app.use('/docs', createDocsRoutes(APP_NAME, VERSION, `http://localhost:${DEFAULT_PORT}`));
+// // Add docs route with placeholder URL (will be updated with actual port)
+// app.use('/docs', createDocsRoutes(APP_NAME, VERSION, `http://localhost:${DEFAULT_PORT}`));
 
 // ============================================================================
-// SCALAR API REFERENCE
+// SCALAR API REFERENCE (Development Only)
 // ============================================================================
 
-// Scalar API documentation
-app.use(
-  '/reference',
-  apiReference({
-    spec: {
-      content: openApiSpec,
-    },
-    theme: 'purple',
-    metaData: {
-      title: 'TypeORM API Documentation',
-      description: 'Interactive API documentation for the TypeORM OLTP example',
-      ogDescription: 'Explore and test the TypeORM API endpoints',
-    },
-  })
-);
+// Scalar API documentation - only in development
+if (isDevelopment) {
+  app.use(
+    '/reference',
+    apiReference({
+      spec: {
+        content: openApiSpec,
+      },
+      theme: 'purple',
+      metaData: {
+        title: 'TypeORM API Documentation',
+        description: 'Interactive API documentation for the TypeORM OLTP example',
+        ogDescription: 'Explore and test the TypeORM API endpoints',
+      },
+    })
+  );
+  console.log('📚 Scalar API documentation available at /reference (development only)');
+}
 
 // Error handling middleware (must be last)
 app.use(errorHandler);

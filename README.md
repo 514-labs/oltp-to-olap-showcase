@@ -36,6 +36,10 @@ Each package demonstrates the complete pipeline from ORM types → OLAP tables f
 
 🛠️ **Deployment Ready** - Generate deployment scripts and DDL for production
 
+🌐 **REST API with Scalar Docs** - TypeORM example includes full CRUD API with interactive Scalar documentation
+
+⚡ **Hot Reload** - Development server with automatic restart on file changes
+
 ### What's Inside
 
 **Packages:**
@@ -53,6 +57,14 @@ Each package demonstrates the complete pipeline from ORM types → OLAP tables f
 
 ## Quick Start
 
+### Prerequisites
+
+- **Node.js**: v20.x or v22.x (LTS recommended)
+  - ⚠️ **Important**: Node.js v23+ has compatibility issues with native SQLite bindings
+  - Use `nvm use 20` if you have nvm installed
+- **pnpm**: v9.0.0 or higher
+- **Git**: Any recent version
+
 ### 1. Install Dependencies
 
 ```bash
@@ -60,7 +72,23 @@ cd oltp-to-olap-showcase
 pnpm install
 ```
 
-### 2. Run the Prisma Example
+### 2. Run the TypeORM Example (with API Documentation)
+
+The TypeORM example includes a REST API with **Scalar API documentation**:
+
+```bash
+cd apps/typeorm-example
+pnpm run dev
+```
+
+The server will start with auto-reload enabled. Access:
+- **API**: http://localhost:3000
+- **Scalar API Docs**: http://localhost:3000/reference (development only)
+- **Health Check**: http://localhost:3000/health
+
+The dev server uses `tsx watch` and will automatically reload when you save files in the `/src` directory.
+
+### 3. Run the Prisma Example
 
 ```bash
 # Generate Prisma Client
@@ -74,7 +102,7 @@ pnpm exec prisma db push
 pnpm run dev
 ```
 
-### 3. See the Output
+### 4. See the Output
 
 The example will:
 1. ✅ Seed OLTP data (customers, products, orders)
@@ -181,49 +209,71 @@ The examples transform the OLTP schema into:
 ## Getting Started
 
 ### Prerequisites
-- Node.js >= 18.0.0
-- npm >= 9.0.0
+- **Node.js**: v20.x or v22.x (LTS recommended, v23+ not compatible)
+- **pnpm**: v9.0.0 or higher (`npm install -g pnpm`)
 
 ### Installation
 
 ```bash
 cd oltp-to-olap-showcase
-npm install
+pnpm install
+```
+
+### Building the Monorepo
+
+Build all packages (shared library must be built first):
+
+```bash
+# Build shared package
+cd packages/shared
+pnpm run build
+
+# Or build everything from root
+cd ..
+pnpm run build
 ```
 
 ### Running Examples
 
-#### Build All Packages
-```bash
-npm run build
-```
-
-#### Run Individual Examples
-
-**Prisma:**
-```bash
-cd apps/prisma-example
-npm run prisma:generate
-npm run dev
-```
-
-**Drizzle:**
-```bash
-cd apps/drizzle-example
-npm run dev
-```
-
-**TypeORM:**
+#### TypeORM (REST API with Scalar Docs)
 ```bash
 cd apps/typeorm-example
-npm run dev
+pnpm run dev
+
+# Access:
+# - API: http://localhost:3000
+# - Scalar Docs: http://localhost:3000/reference
+# - Health: http://localhost:3000/health
 ```
 
-**Sequelize:**
+#### Prisma
+```bash
+cd apps/prisma-example
+pnpm run prisma:generate
+pnpm run dev
+```
+
+#### Drizzle
+```bash
+cd apps/drizzle-example
+pnpm run dev
+```
+
+#### Sequelize
 ```bash
 cd apps/sequelize-example
-npm run dev
+pnpm run dev
 ```
+
+### Running All Apps in Parallel
+
+From the repository root:
+
+```bash
+pnpm run dev
+```
+
+This runs all example apps simultaneously in development mode.
 
 ## Key Concepts Demonstrated
 
@@ -279,6 +329,71 @@ const facts = OLAPTransformer.transformToFact(records, config);
 const aggregated = OLAPTransformer.aggregateFacts(facts, 'dimensionKey', 'sum');
 ```
 
+## TypeORM REST API Example
+
+The TypeORM example includes a full REST API with CRUD operations and interactive API documentation.
+
+### Available Endpoints
+
+**Customers:**
+- `GET /api/customers` - List all customers
+- `GET /api/customers/:id` - Get customer by ID
+- `POST /api/customers` - Create customer
+- `PUT /api/customers/:id` - Update customer
+- `DELETE /api/customers/:id` - Delete customer
+
+**Products:**
+- `GET /api/products` - List all products
+- `GET /api/products/:id` - Get product by ID
+- `POST /api/products` - Create product
+- `PUT /api/products/:id` - Update product
+- `DELETE /api/products/:id` - Delete product
+
+**Orders:**
+- `GET /api/orders` - List all orders
+- `GET /api/orders/:id` - Get order by ID
+- `POST /api/orders` - Create order
+- `PUT /api/orders/:id` - Update order
+- `DELETE /api/orders/:id` - Delete order
+
+**Order Items:**
+- `GET /api/order-items` - List all order items
+- `GET /api/order-items/:id` - Get order item by ID
+- `POST /api/order-items` - Create order item
+- `PUT /api/order-items/:id` - Update order item
+- `DELETE /api/order-items/:id` - Delete order item
+
+### Scalar API Documentation
+
+The TypeORM example includes **Scalar** for interactive API documentation:
+
+**Development Mode:**
+```bash
+pnpm run dev
+# Scalar available at http://localhost:3000/reference
+```
+
+**Production Mode:**
+```bash
+NODE_ENV=production pnpm start
+# Scalar route is disabled for security
+# Uses strict Content Security Policy
+```
+
+Features:
+- 📖 Browse all API endpoints
+- 🧪 Test API calls directly from the browser
+- 📝 View request/response schemas
+- 🎨 Beautiful purple theme
+- 🔒 Development-only (disabled in production)
+
+### Development Features
+
+- **Auto-reload**: The dev server uses `tsx watch` and automatically restarts when you save files
+- **Hot Module Replacement**: Changes to `/src` directory trigger instant reloads
+- **Security**: Helmet middleware with environment-specific CSP policies
+- **CORS**: Configured for local development
+
 ## ORM-Specific Highlights
 
 ### Prisma
@@ -295,11 +410,62 @@ const aggregated = OLAPTransformer.aggregateFacts(facts, 'dimensionKey', 'sum');
 - Decorator-based entity definitions
 - Active Record or Data Mapper patterns
 - Advanced query builder
+- **REST API with Scalar documentation**
 
 ### Sequelize
 - Model-based ORM with associations
 - Mature ecosystem
 - Flexible configuration
+
+## Troubleshooting
+
+### Node.js Version Issues
+
+**Problem**: `better-sqlite3` or `sqlite3` fails to build
+
+**Solution**: Use Node.js LTS (v20 or v22)
+```bash
+nvm install 20
+nvm use 20
+pnpm install
+```
+
+### Scalar API Not Loading
+
+**Problem**: CSP errors in browser console
+
+**Solution**: Ensure you're in development mode (not production):
+```bash
+# Development (Scalar enabled)
+pnpm run dev
+
+# Production (Scalar disabled)
+NODE_ENV=production pnpm start
+```
+
+### Workspace Linking Issues
+
+**Problem**: `Cannot find module '@oltp-olap/shared'`
+
+**Solution**: Build the shared package first:
+```bash
+cd packages/shared
+pnpm run build
+```
+
+### Port Already in Use
+
+**Problem**: Port 3000 is already occupied
+
+**Solution**: Change the port or kill the existing process:
+```bash
+# Change port
+PORT=3001 pnpm run dev
+
+# Or kill existing process
+lsof -i :3000
+kill -9 <PID>
+```
 
 ## Use Cases
 
@@ -310,6 +476,7 @@ This pattern is useful for:
 - Business intelligence applications
 - Time-series analysis
 - Performance optimization for read-heavy workloads
+- **RESTful APIs with auto-generated documentation**
 
 ## Next Steps
 
@@ -319,6 +486,8 @@ To extend these examples:
 3. Create aggregated tables for common queries
 4. Add more complex fact tables (e.g., inventory snapshots)
 5. Integrate with actual OLAP databases (ClickHouse, Snowflake, BigQuery)
+6. Add authentication and authorization to the REST API
+7. Deploy the TypeORM API to production with proper environment variables
 
 ## Learn More
 

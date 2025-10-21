@@ -93,7 +93,9 @@ export class IdempotentServer {
             console.log(
               `🚀 ${this.config.name} v${this.config.version} running on http://localhost:${currentPort}`
             );
-            console.log(`📚 API Documentation available at http://localhost:${currentPort}/docs`);
+            console.log(
+              `📚 API Documentation available at http://localhost:${currentPort}/reference`
+            );
             console.log(`🏥 Health check available at http://localhost:${currentPort}/health`);
             resolve();
           });

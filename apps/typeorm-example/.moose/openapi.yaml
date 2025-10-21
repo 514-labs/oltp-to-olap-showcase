@@ -1,0 +1,11 @@
+# Use https://editor-next.swagger.io/ if the current version does not support 3.1 yet.
+openapi: 3.1.1
+info:
+  title: example-typeorm-to-olap API
+  version: 1.0.0
+servers:
+- url: http://localhost:4000
+  description: Server URL
+paths: {}
+components:
+  schemas: {}
