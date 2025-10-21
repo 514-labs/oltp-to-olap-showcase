@@ -1,235 +1,176 @@
-# TypeORM API Server
+# TypeORM → Moose OLAP Migration Demo
 
-A simple Express.js API server with CRUD endpoints for TypeORM entities, demonstrating proper TypeScript typing.
+This demo shows how to migrate **TypeORM schemas (OLTP)** to **Moose OlapTables (OLAP)** for ClickHouse analytics. It demonstrates the type adaptations needed to transform normalized relational entities into denormalized analytical tables.
 
-## Features
+## What This Demo Shows
 
-- **Full CRUD operations** for all models (Customer, Product, Order, OrderItem)
-- **Type-safe endpoints** using TypeORM's native type inference
-- **Input validation** with proper error handling
-- **Relations support** - automatically loads related entities
-- **SQLite database** with in-memory storage for easy testing
-- **Express.js** with TypeScript for robust API development
+**Core Concept:** Translate TypeORM entity classes → Moose OlapTable type definitions
 
-## API Endpoints
+- **TypeORM Entities** (`src/entities/`) - Normalized OLTP schema with relationships
+- **Moose OlapTables** (`app/index.ts`) - Denormalized OLAP schema for ClickHouse
+- **Type Adaptations** - Remove relations, convert IDs to `UInt64`, flatten structures
+- **Sample API** - Generate test data in SQLite to demonstrate the concept
+- **Scalar UI** - Interactive API documentation at `/reference`
 
-### Customers
-
-- `GET /api/customers` - Get all customers (with orders)
-- `GET /api/customers/:id` - Get customer by ID (with orders and order items)
-- `POST /api/customers` - Create new customer
-- `PUT /api/customers/:id` - Update customer
-- `DELETE /api/customers/:id` - Delete customer
-
-### Products
-
-- `GET /api/products` - Get all products (with order items)
-- `GET /api/products/:id` - Get product by ID (with order items and orders)
-- `POST /api/products` - Create new product
-- `PUT /api/products/:id` - Update product
-- `DELETE /api/products/:id` - Delete product
-
-### Orders
-
-- `GET /api/orders` - Get all orders (with customer, items, and products)
-- `GET /api/orders/:id` - Get order by ID (with full relations)
-- `POST /api/orders` - Create new order
-- `PUT /api/orders/:id` - Update order
-- `DELETE /api/orders/:id` - Delete order
-
-### Order Items
-
-- `GET /api/order-items` - Get all order items (with order, customer, and product)
-- `GET /api/order-items/:id` - Get order item by ID (with full relations)
-- `POST /api/order-items` - Create new order item
-- `PUT /api/order-items/:id` - Update order item
-- `DELETE /api/order-items/:id` - Delete order item
-
-### Utility Endpoints
-
-- `GET /` - API documentation and available endpoints
-- `GET /health` - Health check endpoint
-
-## Installation & Setup
-
-1. **Install dependencies:**
-
-   ```bash
-   pnpm install
-   ```
-
-2. **Start the development server:**
-
-   ```bash
-   pnpm dev
-   ```
-
-3. **Build for production:**
-   ```bash
-   pnpm build
-   pnpm start
-   ```
-
-## Usage Examples
-
-### Create a Customer
+## Quick Start
 
 ```bash
+# From repository root
+pnpm install
+
+# Navigate to this example
+cd apps/typeorm-example
+
+# Start the API server
+pnpm dev
+
+# Start Moose dev server (Local ClickHouse)
+moose dev
+```
+
+Visit:
+
+- **API:** http://localhost:3000
+- **Scalar UI:** http://localhost:3000/reference
+
+## Key Type Adaptations (`app/index.ts`)
+
+The demo shows how to adapt TypeORM entities for OLAP:
+
+### 1. Remove Relations
+
+TypeORM entities use bidirectional relationships:
+
+```typescript
+// src/entities/Customer.ts (OLTP)
+@Entity()
+export class Customer {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @OneToMany(() => Order, (order) => order.customer)
+  orders: Order[]; // ❌ Relations not needed in OLAP
+}
+```
+
+Moose OlapTables flatten to scalar values:
+
+```typescript
+// app/index.ts (OLAP)
+type OlapCustomer = Omit<InstanceType<typeof Customer>, 'id' | 'orders'> & {
+  id: UInt64; // ✅ Foreign keys as scalars
+};
+```
+
+### 2. Convert IDs to UInt64
+
+ClickHouse uses unsigned integers for efficiency:
+
+```typescript
+type OlapOrder = Omit<
+  InstanceType<typeof Order>,
+  'id' | 'items' | 'customer' // Remove relations
+> & {
+  id: UInt64; // Convert primary key
+  customerId: number; // Keep foreign key as scalar
+};
+```
+
+### 3. Define OlapTables
+
+```typescript
+export const OlapCustomer = new OlapTable<OlapCustomer>('customer', {
+  orderByFields: ['id'],
+});
+
+export const OlapOrder = new OlapTable<OlapOrder>('order', {
+  orderByFields: ['id'],
+});
+```
+
+## Project Structure
+
+```
+apps/typeorm-example/
+├── src/
+│   ├── entities/              # TypeORM OLTP entities
+│   │   ├── Customer.ts        # Customer with @OneToMany orders
+│   │   ├── Order.ts           # Order with @ManyToOne customer
+│   │   ├── Product.ts         # Product with @OneToMany orderItems
+│   │   └── OrderItem.ts       # OrderItem with relations
+│   └── index.ts               # Express API (generates sample data)
+├── app/
+│   └── index.ts               # 🎯 Moose OlapTable definitions
+├── typeorm.db                 # SQLite OLTP database
+└── moose.config.toml          # Moose configuration
+```
+
+## Testing the API
+
+Use the **Scalar UI** at http://localhost:3000/reference or curl:
+
+```bash
+# Create a customer
 curl -X POST http://localhost:3000/api/customers \
   -H "Content-Type: application/json" \
-  -d '{
-    "email": "john@example.com",
-    "name": "John Doe",
-    "country": "USA",
-    "city": "San Francisco"
-  }'
-```
+  -d '{"email":"test@example.com","name":"Test User","country":"USA","city":"SF"}'
 
-### Create a Product
-
-```bash
+# Create a product
 curl -X POST http://localhost:3000/api/products \
   -H "Content-Type: application/json" \
-  -d '{
-    "name": "MacBook Pro",
-    "category": "Electronics",
-    "price": 1999.99
-  }'
+  -d '{"name":"Widget","category":"Electronics","price":99.99}'
+
+# View all customers
+curl http://localhost:3000/api/customers | jq
 ```
 
-### Create an Order
+## What's Missing for Production
 
-```bash
-curl -X POST http://localhost:3000/api/orders \
-  -H "Content-Type: application/json" \
-  -d '{
-    "customerId": 1,
-    "status": "pending",
-    "total": 1999.99
-  }'
-```
+This is a **type-level demonstration**. To production-ready OLTP→OLAP sync, you need:
 
-### Create an Order Item
+### 1. **Change Data Capture (CDC)**
 
-```bash
-curl -X POST http://localhost:3000/api/order-items \
-  -H "Content-Type: application/json" \
-  -d '{
-    "orderId": 1,
-    "productId": 1,
-    "quantity": 1,
-    "price": 1999.99
-  }'
-```
+- Real-time streaming from OLTP to OLAP (Debezium, Kafka, etc.)
+- This demo manually defines types but doesn't sync data
 
-### Get All Customers with Relations
+### 2. **Data Transformation Pipeline**
 
-```bash
-curl http://localhost:3000/api/customers
-```
+- Moose Flows to denormalize joined data
+- Handle incremental updates and deletes
+- Aggregate calculations for fact tables
 
-### Get Customer by ID with Full Relations
+### 3. **Schema Evolution**
 
-```bash
-curl http://localhost:3000/api/customers/1
-```
+- Handle TypeORM migrations → Moose schema changes
+- Version compatibility between OLTP/OLAP
 
-## TypeScript Type Safety
+### 4. **Production Infrastructure**
 
-The API demonstrates proper TypeORM type usage:
+- Real PostgreSQL/MySQL instead of SQLite
+- ClickHouse cluster deployment
+- Monitoring and alerting
 
-### Insert Types
+### 5. **Data Quality**
 
-```typescript
-// Using DeepPartial for flexible inserts
-const customerData: DeepPartial<Customer> = {
-  email: 'test@example.com',
-  name: 'Test User',
-  country: 'USA',
-  city: 'New York',
-};
-```
+- Validation between source and target
+- Deduplication strategies
+- Late-arriving data handling
 
-### Update Types
+## Technologies
 
-```typescript
-// Using Omit to exclude auto-generated fields
-type CustomerUpdate = Partial<Omit<Customer, 'id' | 'createdAt' | 'orders'>>;
-const updateData: CustomerUpdate = {
-  name: 'Updated Name',
-  city: 'Updated City',
-};
-```
+- **TypeORM** 0.3.17 - OLTP ORM layer
+- **Moose** 0.6.144 - OLAP table definitions
+- **Express** 4.18.2 - Sample API server
+- **Scalar** 0.8.22 - Interactive API documentation
+- **better-sqlite3** 11.6.0 - Embedded OLTP database
 
-### Repository Operations
+## Learn More
 
-```typescript
-// TypeORM automatically infers correct types
-const customer = customerRepo.create(customerData);
-const savedCustomer = await customerRepo.save(customer);
-```
+- [Repository Root README](../../README.md) - Complete project overview
+- [TypeORM Documentation](https://typeorm.io/)
+- [Moose Documentation](https://docs.moosejs.com/)
+- [ClickHouse Documentation](https://clickhouse.com/docs/)
 
-## Error Handling
+## License
 
-The API includes comprehensive error handling:
-
-- **Validation errors** (400) - Missing required fields
-- **Not found errors** (404) - Entity doesn't exist
-- **Server errors** (500) - Database or internal errors
-- **Graceful shutdown** - Properly closes database connections
-
-## Database Schema
-
-The API uses TypeORM entities with the following relationships:
-
-- **Customer** → **Order** (One-to-Many)
-- **Order** → **OrderItem** (One-to-Many)
-- **Product** → **OrderItem** (One-to-Many)
-
-All entities include:
-
-- Auto-generated IDs
-- Created timestamps
-- Proper foreign key relationships
-- TypeORM decorators for validation
-
-## Development
-
-The server runs on `http://localhost:3000` by default. The database is in-memory SQLite, so data resets on each restart.
-
-For production deployment, you would typically:
-
-1. Use a persistent database (PostgreSQL, MySQL, etc.)
-2. Add authentication/authorization
-3. Add rate limiting
-4. Add logging and monitoring
-5. Use environment variables for configuration
-
-## API Response Format
-
-All responses follow a consistent format:
-
-### Success Response
-
-```json
-{
-  "id": 1,
-  "email": "john@example.com",
-  "name": "John Doe",
-  "country": "USA",
-  "city": "San Francisco",
-  "createdAt": "2024-01-01T00:00:00.000Z",
-  "orders": []
-}
-```
-
-### Error Response
-
-```json
-{
-  "error": "Validation Error",
-  "message": "Email, name, country, and city are required"
-}
-```
-
-This API server demonstrates best practices for building TypeORM-based APIs with full TypeScript type safety!
+MIT
