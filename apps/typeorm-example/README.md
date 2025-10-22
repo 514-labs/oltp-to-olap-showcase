@@ -1,176 +1,236 @@
-# TypeORM → Moose OLAP Migration Demo
+# TypeORM CDC Example
 
-This demo shows how to migrate **TypeORM schemas (OLTP)** to **Moose OlapTables (OLAP)** for ClickHouse analytics. It demonstrates the type adaptations needed to transform normalized relational entities into denormalized analytical tables.
+**Real-time PostgreSQL CDC → Moose → ClickHouse**
 
-## What This Demo Shows
+Transform TypeORM entities into denormalized OLAP tables with real-time CDC replication.
 
-**Core Concept:** Translate TypeORM entity classes → Moose OlapTable type definitions
+## 🎯 What This Does
 
-- **TypeORM Entities** (`src/entities/`) - Normalized OLTP schema with relationships
-- **Moose OlapTables** (`app/index.ts`) - Denormalized OLAP schema for ClickHouse
-- **Type Adaptations** - Remove relations, convert IDs to `UInt64`, flatten structures
-- **Sample API** - Generate test data in SQLite to demonstrate the concept
-- **Scalar UI** - Interactive API documentation at `/reference`
+- ✅ TypeORM entities automatically streamed to ClickHouse
+- ✅ Real-time CDC using Redpanda Connect
+- ✅ Denormalized star schema for fast analytics
+- ✅ Express API with OpenAPI docs
+- ✅ React test client included
 
-## Quick Start
+**Architecture:** PostgreSQL → Redpanda Connect → Redpanda → Moose Flows → ClickHouse
+
+## 🚀 Quick Start
+
+⚠️ **Requires [Redpanda Enterprise License](LICENSE_SETUP.md)** - Free 30-day trial available
+
+### 1. Set License
 
 ```bash
-# From repository root
-pnpm install
+export REDPANDA_LICENSE="your_license_key_here"
+```
 
-# Navigate to this example
-cd apps/typeorm-example
+### 2. Start Infrastructure
 
-# Start the API server
-pnpm dev
-
-# Start Moose dev server (Local ClickHouse)
+```bash
+# Terminal 1: Start Moose (keeps running)
 moose dev
 ```
 
-Visit:
+**Expected:** `⏳ Waiting for tables to be created by TypeORM API...`
 
-- **API:** http://localhost:3000
-- **Scalar UI:** http://localhost:3000/reference
+### 3. Start OLTP Application
 
-## Key Type Adaptations (`app/index.ts`)
-
-The demo shows how to adapt TypeORM entities for OLAP:
-
-### 1. Remove Relations
-
-TypeORM entities use bidirectional relationships:
-
-```typescript
-// src/entities/Customer.ts (OLTP)
-@Entity()
-export class Customer {
-  @PrimaryGeneratedColumn()
-  id: number;
-
-  @OneToMany(() => Order, (order) => order.customer)
-  orders: Order[]; // ❌ Relations not needed in OLAP
-}
+```bash
+# Terminal 2: Start PostgreSQL and API
+pnpm start-oltp  # Starts PostgreSQL
+pnpm dev         # Starts API server
 ```
 
-Moose OlapTables flatten to scalar values:
+**What happens:**
+- PostgreSQL starts with logical replication enabled
+- Tables created via TypeORM
+- CDC publication created automatically
+- Redpanda Connect starts streaming changes
+- ✨ Your CDC pipeline is live!
 
-```typescript
-// app/index.ts (OLAP)
-type OlapCustomer = Omit<InstanceType<typeof Customer>, 'id' | 'orders'> & {
-  id: UInt64; // ✅ Foreign keys as scalars
-};
+### 4. Test the Pipeline
+
+```bash
+# Terminal 3: Start test client (optional)
+cd ../test-client
+pnpm dev
 ```
 
-### 2. Convert IDs to UInt64
+Visit http://localhost:3001 to create/update/delete orders and watch CDC in action!
 
-ClickHouse uses unsigned integers for efficiency:
-
-```typescript
-type OlapOrder = Omit<
-  InstanceType<typeof Order>,
-  'id' | 'items' | 'customer' // Remove relations
-> & {
-  id: UInt64; // Convert primary key
-  customerId: number; // Keep foreign key as scalar
-};
-```
-
-### 3. Define OlapTables
-
-```typescript
-export const OlapCustomer = new OlapTable<OlapCustomer>('customer', {
-  orderByFields: ['id'],
-});
-
-export const OlapOrder = new OlapTable<OlapOrder>('order', {
-  orderByFields: ['id'],
-});
-```
-
-## Project Structure
-
-```
-apps/typeorm-example/
-├── src/
-│   ├── entities/              # TypeORM OLTP entities
-│   │   ├── Customer.ts        # Customer with @OneToMany orders
-│   │   ├── Order.ts           # Order with @ManyToOne customer
-│   │   ├── Product.ts         # Product with @OneToMany orderItems
-│   │   └── OrderItem.ts       # OrderItem with relations
-│   └── index.ts               # Express API (generates sample data)
-├── app/
-│   └── index.ts               # 🎯 Moose OlapTable definitions
-├── typeorm.db                 # SQLite OLTP database
-└── moose.config.toml          # Moose configuration
-```
-
-## Testing the API
-
-Use the **Scalar UI** at http://localhost:3000/reference or curl:
+**Or use the API directly:**
 
 ```bash
 # Create a customer
 curl -X POST http://localhost:3000/api/customers \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","name":"Test User","country":"USA","city":"SF"}'
+  -d '{"email": "test@example.com", "name": "Test User", "country": "USA", "city": "NYC"}'
 
 # Create a product
 curl -X POST http://localhost:3000/api/products \
   -H "Content-Type: application/json" \
-  -d '{"name":"Widget","category":"Electronics","price":99.99}'
+  -d '{"name": "Laptop", "category": "Electronics", "price": 999.99}'
 
-# View all customers
-curl http://localhost:3000/api/customers | jq
+# Create an order
+curl -X POST http://localhost:3000/api/orders \
+  -H "Content-Type: application/json" \
+  -d '{"customerId": 1, "status": "pending", "total": 999.99}'
 ```
 
-## What's Missing for Production
+### 5. Query ClickHouse
 
-This is a **type-level demonstration**. To production-ready OLTP→OLAP sync, you need:
+```bash
+# Connect to ClickHouse
+docker exec -it moose-clickhouse clickhouse-client -u panda --password pandapass
 
-### 1. **Change Data Capture (CDC)**
+# Query denormalized data
+SELECT * FROM local.order_fact LIMIT 10;
+```
 
-- Real-time streaming from OLTP to OLAP (Debezium, Kafka, etc.)
-- This demo manually defines types but doesn't sync data
+## 📖 Documentation
 
-### 2. **Data Transformation Pipeline**
+### Essential Guides
+- **[Quick Start](docs/MOOSE_CDC_QUICKSTART.md)** - Get running in 5 minutes
+- **[License Setup](LICENSE_SETUP.md)** - Get your Redpanda license
+- **[Complete Setup Guide](docs/SETUP_GUIDE.md)** - Detailed setup with troubleshooting
 
-- Moose Flows to denormalize joined data
-- Handle incremental updates and deletes
-- Aggregate calculations for fact tables
+### Architecture & Design
+- **[CDC Pipeline Design](docs/CDC_PIPELINE_DESIGN.md)** - How the CDC pipeline works
+- **[OLAP Conversion Guide](docs/OLAP_CONVERSION_GUIDE.md)** - TypeORM → Moose patterns
+- **[Fact Table Strategy](docs/FACT_TABLE_STRATEGY.md)** - Denormalization patterns
+- **[Documentation Index](docs/README.md)** - All documentation
 
-### 3. **Schema Evolution**
+## 🏗️ Project Structure
 
-- Handle TypeORM migrations → Moose schema changes
-- Version compatibility between OLTP/OLAP
+```
+typeorm-example/
+├── src/
+│   ├── entities/           # TypeORM OLTP entities
+│   │   ├── Customer.ts
+│   │   ├── Product.ts
+│   │   ├── Order.ts
+│   │   └── OrderItem.ts
+│   ├── index.ts            # Express API server
+│   ├── openapi.ts          # OpenAPI specification
+│   └── setup-db.ts         # Database initialization
+│
+├── app/
+│   ├── index.ts            # Moose OLAP table definitions
+│   └── streams/            # (Auto-generated streaming functions)
+│
+├── docs/                   # Complete documentation
+│
+├── docker-compose.oltp.yaml           # PostgreSQL service
+├── docker-compose.dev.override.yaml   # CDC services
+├── redpanda-connect.yaml              # CDC configuration
+├── moose.config.toml                  # Moose settings
+│
+├── start-oltp.sh           # Start OLTP (PostgreSQL + setup)
+├── moose-cdc-setup.sh      # CDC setup hook (auto-run by Moose)
+└── init-postgres.sh        # PostgreSQL init (auto-run by Docker)
+```
 
-### 4. **Production Infrastructure**
+## 🎓 How It Works
 
-- Real PostgreSQL/MySQL instead of SQLite
-- ClickHouse cluster deployment
-- Monitoring and alerting
+### TypeORM Entities (OLTP)
 
-### 5. **Data Quality**
+```typescript
+// src/entities/Order.ts
+@Entity()
+export class Order {
+  @PrimaryGeneratedColumn()
+  id: number;
 
-- Validation between source and target
-- Deduplication strategies
-- Late-arriving data handling
+  @Column('decimal', { precision: 10, scale: 2 })
+  total: number;
 
-## Technologies
+  @ManyToOne(() => Customer)
+  customer: Customer;
 
-- **TypeORM** 0.3.17 - OLTP ORM layer
-- **Moose** 0.6.144 - OLAP table definitions
-- **Express** 4.18.2 - Sample API server
-- **Scalar** 0.8.22 - Interactive API documentation
-- **better-sqlite3** 11.6.0 - Embedded OLTP database
+  @OneToMany(() => OrderItem, item => item.order)
+  items: OrderItem[];
+}
+```
 
-## Learn More
+### Moose OLAP Tables
 
-- [Repository Root README](../../README.md) - Complete project overview
-- [TypeORM Documentation](https://typeorm.io/)
-- [Moose Documentation](https://docs.moosejs.com/)
+```typescript
+// app/index.ts
+export interface OrderFact {
+  order_id: UInt64;
+  customer_id: UInt64;
+  customer_name: string;      // Denormalized!
+  customer_email: string;     // Denormalized!
+  status: string;
+  total: Float64;
+  order_date: DateTime;
+}
+
+export const OrderFact = new OlapTable<OrderFact>('order_fact', {
+  orderByFields: ['order_date', 'order_id']
+});
+```
+
+### CDC Event Flow
+
+```
+TypeORM           PostgreSQL        Redpanda          Moose            ClickHouse
+Insert   ──────>   WAL      ──────>  Connect  ──────>  Flow   ──────>  Table
+Order              Capture           Stream            Transform         Insert
+```
+
+## 🚨 Common Issues
+
+### "Waiting for tables" persists
+**Solution:** Run `pnpm dev` to start the API and create tables
+
+### Redpanda Connect won't start
+**Solution:** Check license is set: `echo $REDPANDA_LICENSE`
+
+### Publication errors
+**Solution:** See [Troubleshooting Guide](docs/SETUP_GUIDE.md#troubleshooting)
+
+### More issues?
+Check the **[Complete Setup Guide](docs/SETUP_GUIDE.md)** for detailed troubleshooting.
+
+## 🔗 Useful Links
+
+**API Endpoints:**
+- API Server: http://localhost:3000
+- API Documentation: http://localhost:3000/reference
+- Redpanda Connect Health: http://localhost:4195/ready
+
+**Admin UIs:**
+- Moose Console: http://localhost:5001
+- Test Client: http://localhost:3001
+
+## 📦 Available Scripts
+
+```bash
+pnpm start-oltp    # Start PostgreSQL
+pnpm stop-oltp     # Stop PostgreSQL
+pnpm setup-db      # Initialize database tables
+pnpm dev           # Start API server (dev mode)
+pnpm build         # Build TypeScript
+```
+
+## 🛠️ Technology Stack
+
+- **OLTP:** PostgreSQL 15 + TypeORM 0.3
+- **CDC:** Redpanda Connect (Enterprise) + PostgreSQL CDC connector
+- **Streaming:** Redpanda (Kafka-compatible)
+- **OLAP:** Moose 0.6 + ClickHouse
+- **API:** Express + Scalar OpenAPI docs
+- **Language:** TypeScript 5
+
+## 📚 Learn More
+
+- [Moose Documentation](https://docs.fiveonefour.com/moose/)
+- [Redpanda Connect PostgreSQL CDC](https://docs.redpanda.com/redpanda-connect/components/inputs/postgres_cdc/)
+- [PostgreSQL Logical Replication](https://www.postgresql.org/docs/current/logical-replication.html)
 - [ClickHouse Documentation](https://clickhouse.com/docs/)
+- [TypeORM Documentation](https://typeorm.io/)
 
-## License
+---
 
-MIT
+**Need help?** Check the **[Documentation Index](docs/README.md)** or open an issue.

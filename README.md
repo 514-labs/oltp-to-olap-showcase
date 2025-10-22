@@ -1,166 +1,250 @@
 # OLTP to OLAP Showcase
 
-**"Just OLAP It" - Migration patterns for moving analytics from your OLTP database to ClickHouse**
+**Real-time CDC pipeline: PostgreSQL (TypeORM) → Redpanda → Moose → ClickHouse**
 
-## Inspiration
+Stream changes from your OLTP database to OLAP analytics in real-time using Change Data Capture.
 
-This repository was inspired by a keynote presentation at [OpenHouse NYC](https://clickhouse.com/openhouse/nyc), where the Ramp engineering team shared their approach to database performance optimization.
+## 🎯 What This Is
 
-Their mantra: **For every slow query on PostgreSQL, "just OLAP it."**
+A complete working example of:
 
-Instead of optimizing complex analytical queries in their OLTP database, Ramp migrates them to ClickHouse. This keeps their transactional database fast while giving analytics queries the columnar, OLAP-optimized environment they need.
+- **TypeORM entities** (OLTP) → **Moose OlapTables** (OLAP)
+- **Real-time CDC** using Redpanda Connect PostgreSQL CDC connector
+- **Automatic denormalization** for fast analytics
+- **Test client** to trigger CDC events
 
-## The Goal
+**Architecture:** PostgreSQL → Redpanda Connect → Redpanda → Moose Flows → ClickHouse
 
-This repository demonstrates **how to "just OLAP it"** for your TypeScript stack. We show migration patterns for popular ORMs (TypeORM, Prisma, Drizzle, Sequelize), so you can quickly translate your existing OLTP models to OLAP tables using [Moose OLAP](https://docs.fiveonefour.com/moose/olap) and ClickHouse.
+## 🚀 Quick Start
 
-**The process:**
-
-1. **Start with** your existing ORM models (TypeORM entities, Prisma schemas, etc.)
-2. **Translate** them to Moose OlapTable types (remove relations, flatten structures, adapt types)
-3. **Deploy** to ClickHouse for blazing-fast analytical queries
-4. **Keep** your OLTP database focused on transactions
-
-Each ORM has different patterns for schema definition. This showcase provides working examples adapted to each.
-
-## Demo Status
-
-| ORM           | Status      | Description                                                  |
-| ------------- | ----------- | ------------------------------------------------------------ |
-| **TypeORM**   | ✅ Complete | Full working demo with API, Moose integration, and Scalar UI |
-| **Prisma**    | 🚧 WIP      | Coming soon                                                  |
-| **Drizzle**   | 🚧 WIP      | Coming soon                                                  |
-| **Sequelize** | 🚧 WIP      | Coming soon                                                  |
-
-## Quick Start
+⚠️ **Requires Redpanda Enterprise License** - [Get a free 30-day trial](https://redpanda.com/try-enterprise)
 
 ```bash
-# Install dependencies
+# Clone and install
+git clone <your-repo-url>
+cd oltp-to-olap-showcase
 pnpm install
 
-# Navigate to TypeORM example
+# Navigate to the TypeORM CDC example
 cd apps/typeorm-example
 
-# Start the API server
-pnpm dev
+# Set your Redpanda license
+export REDPANDA_LICENSE="your_license_key_here"
 
-# In a new terminal, start Moose dev server (local ClickHouse)
+# Terminal 1: Start Moose (ClickHouse + Redpanda + CDC)
 moose dev
+
+# Terminal 2: Start OLTP application
+pnpm start-oltp  # Starts PostgreSQL
+pnpm dev         # Starts API server
+
+# Terminal 3: Start test client (optional)
+cd ../test-client
+pnpm dev
 ```
 
-Visit:
+**What you'll see:**
 
-- **API:** http://localhost:3000
-- **Scalar UI:** http://localhost:3000/reference (interactive API docs)
+- PostgreSQL with TypeORM entities
+- CDC streaming changes in real-time
+- ClickHouse tables automatically updated
+- Test UI to create/update/delete orders
 
-**What you'll see:** A working e-commerce API (Customers, Products, Orders) with TypeORM entities automatically translated to Moose OlapTables for ClickHouse analytics.
+**Visit:**
 
-**Prerequisites:** Node.js v20-22 (⚠️ not v23+), pnpm v9+
+- API: http://localhost:3000
+- API Docs: http://localhost:3000/reference
+- Test Client: http://localhost:3001
 
-## How It Works
+## 📖 Documentation
 
-### 1. OLTP Models (Your Existing Code)
+### Getting Started
 
-TypeORM entities with decorators and relationships:
+- **[TypeORM Example](apps/typeorm-example/README.md)** - Main project README
+- **[Quick Start Guide](apps/typeorm-example/docs/MOOSE_CDC_QUICKSTART.md)** - 5-minute setup
+- **[License Setup](apps/typeorm-example/LICENSE_SETUP.md)** - Get your Redpanda license
+
+### Detailed Guides
+
+- **[Complete Setup Guide](apps/typeorm-example/docs/SETUP_GUIDE.md)** - Step-by-step with troubleshooting
+- **[CDC Pipeline Design](apps/typeorm-example/docs/CDC_PIPELINE_DESIGN.md)** - Architecture deep dive
+- **[OLAP Conversion Guide](apps/typeorm-example/docs/OLAP_CONVERSION_GUIDE.md)** - TypeORM → Moose patterns
+- **[Documentation Index](apps/typeorm-example/docs/README.md)** - Complete docs
+
+## 🏗️ Project Structure
+
+```
+oltp-to-olap-showcase/
+├── apps/
+│   ├── typeorm-example/      ✅ Complete CDC demo
+│   │   ├── src/              # TypeORM OLTP entities & API
+│   │   ├── app/              # Moose OLAP table definitions
+│   │   ├── docs/             # Complete documentation
+│   │   ├── *.sh              # Setup scripts
+│   │   └── *.yaml            # Docker compose configs
+│   │
+│   └── test-client/          ✅ React UI for testing
+│       └── src/              # Test client app
+│
+├── packages/                 (shared utilities)
+└── README.md                 👈 You are here
+```
+
+## 🎓 How It Works
+
+### 1. OLTP Models (TypeORM)
 
 ```typescript
-// src/entities/Customer.ts
+// src/entities/Order.ts
 @Entity()
-export class Customer {
+export class Order {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @OneToMany(() => Order, (order) => order.customer)
-  orders: Order[]; // Relations for transactional queries
+  @ManyToOne(() => Customer)
+  customer: Customer;
+
+  @OneToMany(() => OrderItem, (item) => item.order)
+  items: OrderItem[];
 }
 ```
 
-### 2. OLAP Types (Moose Translation)
+### 2. CDC Stream (PostgreSQL WAL)
 
-Moose OlapTable types - remove relations, convert IDs:
+PostgreSQL logical replication captures every INSERT, UPDATE, DELETE:
+
+```json
+{
+  "table": "orders",
+  "operation": "insert",
+  "before": null,
+  "after": {
+    "id": 1,
+    "customer_id": 123,
+    "status": "pending",
+    "total": 99.99
+  }
+}
+```
+
+### 3. OLAP Tables (Moose)
+
+Denormalized for analytics - no JOINs needed:
 
 ```typescript
 // app/index.ts
-type OlapCustomer = Omit<InstanceType<typeof Customer>, 'id' | 'orders'> & {
-  id: UInt64; // ClickHouse-optimized unsigned int
-};
+export interface OrderFact {
+  order_id: UInt64;
+  customer_id: UInt64;
+  customer_name: string; // Denormalized!
+  customer_email: string; // Denormalized!
+  status: string;
+  total: Float64;
+  order_date: DateTime;
+}
 
-export const OlapCustomer = new OlapTable<OlapCustomer>('customer', {
-  orderByFields: ['id'],
+export const OrderFact = new OlapTable<OrderFact>('order_fact', {
+  orderByFields: ['order_date', 'order_id'],
 });
 ```
 
-### 3. Deploy to ClickHouse
+### 4. Fast Analytics (ClickHouse)
 
-```bash
-moose dev  # Local ClickHouse for testing
-# or
-moose deploy  # Production ClickHouse
+```sql
+-- No JOINs! Everything pre-joined
+SELECT
+  customer_name,
+  COUNT(*) as order_count,
+  SUM(total) as total_revenue
+FROM order_fact
+WHERE order_date >= today() - INTERVAL 30 DAY
+GROUP BY customer_name
+ORDER BY total_revenue DESC;
 ```
 
-Now analytical queries run on ClickHouse, not your OLTP database.
-
-## Project Structure
+## 🔄 Data Flow
 
 ```
-apps/
-├── typeorm-example/     ✅ Complete - Full demo with API and Moose integration
-├── prisma-example/      🚧 WIP
-├── drizzle-example/     🚧 WIP
-└── sequelize-example/   🚧 WIP
+┌─────────────┐   CDC Events   ┌──────────────┐   Kafka Topic   ┌─────────────┐
+│ PostgreSQL  │──────WAL──────>│   Redpanda   │────────────────>│  Moose      │
+│  (TypeORM)  │                │   Connect    │                 │  Functions  │
+└─────────────┘                └──────────────┘                 └─────┬───────┘
+                                                                      │
+                                                                      │ Transform
+                                                                      ▼
+                                                               ┌────────────┐
+                                                               │ ClickHouse │
+                                                               │   (OLAP)   │
+                                                               └────────────┘
 ```
 
-Each example shows:
+Every database change is:
 
-- ORM-specific entity/model definitions (OLTP)
-- Moose OlapTable type adaptations (OLAP)
-- Sample API to generate test data
-- Deployment patterns for ClickHouse
+1. **Captured** by PostgreSQL WAL
+2. **Streamed** via Redpanda Connect
+3. **Transformed** by Moose flows
+4. **Stored** in ClickHouse
 
-## Documentation
+## 🎯 Use Cases
 
-Detailed guides for each example:
+**When to use this pattern:**
 
-- **[TypeORM Example →](apps/typeorm-example/README.md)** - Complete TypeORM + Moose guide
-- **Prisma Example** - Coming soon
-- **Drizzle Example** - Coming soon
-- **Sequelize Example** - Coming soon
+✅ Slow analytical queries on your OLTP database
+✅ Need real-time analytics without impacting transactions
+✅ Want to separate operational and analytical workloads
+✅ Need to denormalize data for fast queries
+✅ Building dashboards or reports
 
-## Technology Stack
+**Real-world scenarios:**
 
-- **ORMs:** TypeORM (complete), Prisma/Drizzle/Sequelize (WIP)
-- **OLAP:** Moose v0.6.144 + ClickHouse
-- **API:** Express, Scalar (interactive docs)
-- **Database:** SQLite (demo), PostgreSQL/MySQL (production)
-- **Tooling:** TypeScript, pnpm, tsx
+- Customer analytics dashboards
+- Order/revenue metrics
+- Product performance reports
+- Real-time monitoring
+- Audit trails
 
-## What's Next?
+## 🛠️ Technology Stack
 
-### Production Considerations
+- **OLTP:** PostgreSQL + TypeORM
+- **CDC:** Redpanda Connect (PostgreSQL CDC connector)
+- **Streaming:** Redpanda (Kafka API)
+- **OLAP:** Moose + ClickHouse
+- **API:** Express + Scalar (OpenAPI docs)
+- **Test Client:** React + Vite + shadcn/ui
 
-This demo focuses on **type-level translation patterns**. For production OLTP→OLAP sync, you'll need:
+## 📚 Key Concepts
 
-1. **Change Data Capture (CDC)** - Stream changes from OLTP to OLAP (Debezium, Kafka, etc.)
-2. **ETL Pipeline** - Moose Flows or scheduled jobs for data transformation
-3. **Schema Evolution** - Handle ORM migrations → ClickHouse schema updates
-4. **Monitoring** - Track sync lag, data quality, query performance
+### Change Data Capture (CDC)
 
-### Contributing
+Captures every database change at the transaction log level (PostgreSQL WAL). No polling, no triggers - just pure log-based replication.
 
-Help us complete the remaining ORM examples:
+### Denormalization
 
-- **Prisma** - Schema definitions with `@prisma/client`
-- **Drizzle** - Type-safe schema with `drizzle-orm`
-- **Sequelize** - Model definitions with Sequelize ORM
+Pre-joining related data to avoid expensive JOINs in analytics. Orders include customer names inline instead of requiring joins.
 
-See each `apps/*/README.md` for specific implementation patterns.
+### Star Schema
 
-## Learn More
+Dimensional modeling with fact tables (orders) and dimension tables (customers, products). Optimized for analytical queries.
 
-- **[Moose Documentation](https://docs.moosejs.com/)** - OLAP framework for ClickHouse
-- **[ClickHouse Docs](https://clickhouse.com/docs/)** - Columnar analytical database
-- **[TypeORM Docs](https://typeorm.io/)** - TypeScript ORM for SQL databases
+### Real-time Sync
 
-## License
+Changes appear in ClickHouse within seconds, not hours. Perfect for live dashboards and real-time reporting.
+
+## 🤝 Contributing
+
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## 📄 License
 
 MIT
+
+## 🔗 Learn More
+
+- [Moose Documentation](https://docs.fiveonefour.com/moose/)
+- [Redpanda Connect](https://docs.redpanda.com/redpanda-connect/)
+- [ClickHouse Docs](https://clickhouse.com/docs/)
+- [TypeORM](https://typeorm.io/)
+
+---
+
+**Ready to get started?** → [TypeORM Example](apps/typeorm-example/README.md)

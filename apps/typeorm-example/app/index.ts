@@ -1,34 +1,34 @@
-import { OlapTable, UInt64 } from '@514labs/moose-lib';
-import { Customer, Order, Product, OrderItem } from '../src/entities';
+/**
+ * Moose OLAP Application
+ *
+ * This module exports the complete CDC pipeline configuration:
+ * - Source topics (Redpanda CDC events)
+ * - Transformations (OLTP → OLAP conversion)
+ * - Sink topics/tables (ClickHouse destinations)
+ * - Materialized views (enrichment layer)
+ */
 
-type OlapCustomer = Omit<InstanceType<typeof Customer>, 'id' | 'orders'> & {
-  id: UInt64;
-};
+// ============================================================================
+// DATA SOURCES
+// ============================================================================
+// External Kafka topics that bring in CDC events from PostgreSQL
+export * from './sources/externalTopics';
 
-type OlapOrder = Omit<InstanceType<typeof Order>, 'id' | 'items' | 'customer'> & {
-  id: UInt64;
-};
+// ============================================================================
+// TRANSFORMATIONS
+// ============================================================================
+// Stream processing logic that transforms CDC events to OLAP format
+export * from './transformations';
 
-type OlapProduct = Omit<InstanceType<typeof Product>, 'id' | 'orderItems'> & {
-  id: UInt64;
-};
+// ============================================================================
+// DESTINATIONS
+// ============================================================================
+// Sink topics (intermediate streams) and tables (ClickHouse tables)
+export * from './sinkTopics';
+export * from './sinkTables';
 
-type OlapOrderItem = Omit<InstanceType<typeof OrderItem>, 'id' | 'order' | 'product'> & {
-  id: UInt64;
-};
-
-export const OlapCustomer = new OlapTable<OlapCustomer>('customer', {
-  orderByFields: ['id'],
-});
-
-export const OlapOrder = new OlapTable<OlapOrder>('order', {
-  orderByFields: ['id'],
-});
-
-export const OlapProduct = new OlapTable<OlapProduct>('product', {
-  orderByFields: ['id'],
-});
-
-export const OlapOrderItem = new OlapTable<OlapOrderItem>('order_item', {
-  orderByFields: ['id'],
-});
+// ============================================================================
+// ENRICHMENT
+// ============================================================================
+// Materialized views and dictionaries for enriching fact tables
+export * from './materializedViews';

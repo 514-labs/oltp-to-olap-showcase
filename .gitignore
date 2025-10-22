@@ -8,3 +8,14 @@ dist/
 coverage/
 *.db
 *.sqlite
+
+# Moose build artifacts
+.moose/
+app/*.js
+app/*.js.map
+app/*.d.ts
+app/*.d.ts.map
+
+# TypeScript incremental build
+tsconfig.tsbuildinfo
+*.tsbuildinfo

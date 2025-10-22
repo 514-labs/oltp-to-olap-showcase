@@ -4,127 +4,111 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { DataSource, DeepPartial } from 'typeorm';
 import { apiReference } from '@scalar/express-api-reference';
-import { Customer, Product, Order, OrderItem } from './entities';
+import { Customer, Product, Order, OrderItem, CustomerAddress } from './entities';
 import { openApiSpec } from './openapi';
-import {
-  // Shared middleware
-  requestContextMiddleware,
-  loggingMiddleware,
-  errorHandler,
-  notFoundHandler,
-  corsOptions,
-  helmetOptions,
-  // Shared routes
-  createHealthRoutes,
-  createDocsRoutes,
-  createRootRoutes,
-  createUtilityRoutes,
-  // Shared utilities
-  sendSuccess,
-  sendError,
-  sendCreated,
-  sendNoContent,
-  sendNotFound,
-  sendValidationError,
-  // Shared types
-  AsyncHandler,
-  ValidationHandler,
-  // Server utilities
-  createIdempotentServer,
-  ServerConfig,
-} from '@oltp-olap/shared';
 
 /**
  * TypeORM API Server
  *
  * A simple Express.js API server with CRUD endpoints for each TypeORM model.
- * Uses shared middleware, routes, and utilities for common functionality.
  */
 
-// Initialize TypeORM DataSource
+// ============================================================================
+// SIMPLE RESPONSE HELPERS
+// ============================================================================
+
+const sendSuccess = (res: Response, data: any) => {
+  res.status(200).json({ success: true, data });
+};
+
+const sendCreated = (res: Response, data: any) => {
+  res.status(201).json({ success: true, data });
+};
+
+const sendNoContent = (res: Response) => {
+  res.status(204).send();
+};
+
+const sendNotFound = (res: Response, resource: string) => {
+  res.status(404).json({ success: false, error: `${resource} not found` });
+};
+
+const sendValidationError = (res: Response, message: string) => {
+  res.status(400).json({ success: false, error: message });
+};
+
+const sendError = (res: Response, message: string, status = 500) => {
+  res.status(status).json({ success: false, error: message });
+};
+
+// ============================================================================
+// DATABASE SETUP
+// ============================================================================
+
+// Initialize TypeORM DataSource (PostgreSQL with CDC support)
 const AppDataSource = new DataSource({
-  type: 'better-sqlite3',
-  database: './typeorm.db',
-  synchronize: true,
+  type: 'postgres',
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT || '5433', 10),
+  username: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || 'postgres',
+  database: process.env.DB_NAME || 'typeorm_db',
+  synchronize: false, // Tables created by setup-db script
   logging: false,
-  entities: [Customer, Product, Order, OrderItem],
+  entities: [Customer, Product, Order, OrderItem, CustomerAddress],
 });
 
-// AI story = inspect the data in the OLTP Customer table to see the actual sample data,
-// then determine the right ClickHouse optimized types for each column & default values.
-type CustomerNonNullable = NonNullable<typeof Customer> & {
-  id: number;
-  email: string;
-  name: string;
-  country: string;
-  city: string;
-  createdAt: Date;
-  orders: Order[];
-};
+// ============================================================================
+// EXPRESS APP SETUP
+// ============================================================================
 
-// establish database connection
-async function initializeDatabase() {
-  try {
-    await AppDataSource.initialize();
-    console.log('Data Source has been initialized!');
-  } catch (error) {
-    console.error('❌ Error during Data Source initialization:', error);
-  }
-}
-
-initializeDatabase();
-
-// Initialize Express app
 const app = express();
 const DEFAULT_PORT = parseInt(process.env.PORT || '3000', 10);
-const APP_NAME = 'TypeORM API Server';
-const VERSION = '1.0.0';
-
-// Create idempotent server instance
-const serverConfig: ServerConfig = {
-  port: DEFAULT_PORT,
-  app,
-  name: APP_NAME,
-  version: VERSION,
-};
-
-const idempotentServer = createIdempotentServer(serverConfig);
 
 // Determine environment
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
-// Helmet options - relaxed CSP for development (Scalar), strict for production
-const devHelmetOptions = {
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://unpkg.com'],
-      styleSrc: [
-        "'self'",
-        "'unsafe-inline'",
-        'https://cdn.jsdelivr.net',
-        'https://fonts.googleapis.com',
-      ],
-      fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
-      imgSrc: ["'self'", 'data:', 'https:'],
-      connectSrc: ["'self'", 'https://cdn.jsdelivr.net'],
-      workerSrc: ["'self'", 'blob:'],
-    },
-  },
-};
+// ============================================================================
+// MIDDLEWARE
+// ============================================================================
 
-// Middleware
-app.use(helmet(isDevelopment ? devHelmetOptions : helmetOptions));
-app.use(cors(corsOptions));
+// Helmet - Security headers (relaxed for Scalar in development)
+const helmetConfig = isDevelopment
+  ? {
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://unpkg.com'],
+          styleSrc: [
+            "'self'",
+            "'unsafe-inline'",
+            'https://cdn.jsdelivr.net',
+            'https://fonts.googleapis.com',
+          ],
+          fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
+          imgSrc: ["'self'", 'data:', 'https:'],
+          connectSrc: ["'self'", 'https://cdn.jsdelivr.net'],
+          workerSrc: ["'self'", 'blob:'],
+        },
+      },
+    }
+  : {};
+
+app.use(helmet(helmetConfig));
+app.use(cors());
 app.use(express.json());
-app.use(requestContextMiddleware);
-app.use(loggingMiddleware);
+
+// Simple request logging
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path}`);
+  next();
+});
 
 // ============================================================================
 // VALIDATION MIDDLEWARE
 // ============================================================================
 
-const validateCustomer: ValidationHandler = (req, res, next) => {
+const validateCustomer = (req: Request, res: Response, next: NextFunction) => {
   const { email, name, country, city } = req.body;
   if (!email || !name || !country || !city) {
     return sendValidationError(res, 'Email, name, country, and city are required');
@@ -132,7 +116,7 @@ const validateCustomer: ValidationHandler = (req, res, next) => {
   next();
 };
 
-const validateProduct: ValidationHandler = (req, res, next) => {
+const validateProduct = (req: Request, res: Response, next: NextFunction) => {
   const { name, category, price } = req.body;
   if (!name || !category || price === undefined) {
     return sendValidationError(res, 'Name, category, and price are required');
@@ -140,7 +124,7 @@ const validateProduct: ValidationHandler = (req, res, next) => {
   next();
 };
 
-const validateOrder: ValidationHandler = (req, res, next) => {
+const validateOrder = (req: Request, res: Response, next: NextFunction) => {
   const { customerId, status, total } = req.body;
   if (!customerId || !status || total === undefined) {
     return sendValidationError(res, 'CustomerId, status, and total are required');
@@ -148,7 +132,7 @@ const validateOrder: ValidationHandler = (req, res, next) => {
   next();
 };
 
-const validateOrderItem: ValidationHandler = (req, res, next) => {
+const validateOrderItem = (req: Request, res: Response, next: NextFunction) => {
   const { orderId, productId, quantity, price } = req.body;
   if (!orderId || !productId || quantity === undefined || price === undefined) {
     return sendValidationError(res, 'OrderId, productId, quantity, and price are required');
@@ -424,13 +408,19 @@ app.put('/api/orders/:id', async (req: Request, res: Response, next: NextFunctio
 app.delete('/api/orders/:id', async (req, res, next) => {
   try {
     const orderRepo = AppDataSource.getRepository(Order);
-    const orderId = parseInt(req.params.id);
+    const orderItemRepo = AppDataSource.getRepository(OrderItem);
 
-    const result = await orderRepo.delete(orderId);
+    // Delete all order items for the order
+    const orderItems = await orderItemRepo.delete({ orderId: parseInt(req.params.id) });
+    if (orderItems.affected === 0) {
+      return sendNotFound(res, 'Order items');
+    }
+
+    // Delete the order
+    const result = await orderRepo.delete(parseInt(req.params.id));
     if (result.affected === 0) {
       return sendNotFound(res, 'Order');
     }
-
     sendNoContent(res);
   } catch (error) {
     next(error);
@@ -545,89 +535,34 @@ app.delete('/api/order-items/:id', async (req, res, next) => {
 });
 
 // ============================================================================
-// MOOSE OLAP TRANSLATION ENDPOINT
+// BASIC ROUTES
 // ============================================================================
 
-// GET /api/olap/translate - Showcase OLTP to OLAP translation
-app.get('/api/olap/translate', async (req, res, next) => {
-  try {
-    const customerRepo = AppDataSource.getRepository(Customer);
-    const productRepo = AppDataSource.getRepository(Product);
-    const orderItemRepo = AppDataSource.getRepository(OrderItem);
-
-    // Extract OLTP data
-    const customers = await customerRepo.find();
-    const products = await productRepo.find();
-    const orderItems = await orderItemRepo.find({
-      relations: ['order'],
-    });
-
-    // Import translation functions dynamically
-    const {
-      translateCustomersToDimensions,
-      translateProductsToDimensions,
-      translateOrderItemsToSalesFacts,
-    } = await import('../moose-olap/translators');
-
-    // Transform to OLAP format
-    const customerDimensions = translateCustomersToDimensions(customers);
-    const productDimensions = translateProductsToDimensions(products);
-    const salesFacts = translateOrderItemsToSalesFacts(orderItems);
-
-    // Return the translation result
-    sendSuccess(res, {
-      summary: {
-        customersTranslated: customerDimensions.length,
-        productsTranslated: productDimensions.length,
-        salesFactsGenerated: salesFacts.length,
-      },
-      oltp: {
-        customers: customers.slice(0, 2), // Sample
-        products: products.slice(0, 2), // Sample
-        orderItems: orderItems.slice(0, 3), // Sample
-      },
-      olap: {
-        customerDimensions: customerDimensions.slice(0, 2), // Sample
-        productDimensions: productDimensions.slice(0, 2), // Sample
-        salesFacts: salesFacts.slice(0, 3), // Sample
-      },
-      mooseOlapTables: [
-        {
-          table: 'dim_customer',
-          file: 'moose-olap/datamodels/CustomerDimension.ts',
-          engine: 'ReplacingMergeTree()',
-          orderBy: '(id)',
-        },
-        {
-          table: 'dim_product',
-          file: 'moose-olap/datamodels/ProductDimension.ts',
-          engine: 'ReplacingMergeTree()',
-          orderBy: '(id)',
-        },
-        {
-          table: 'fact_sales',
-          file: 'moose-olap/datamodels/SalesFact.ts',
-          engine: 'MergeTree()',
-          orderBy: '(orderDate, customerId, productId)',
-          partitionBy: 'toYYYYMM(orderDate)',
-        },
-      ],
-    });
-  } catch (error) {
-    next(error);
-  }
+// Root route
+app.get('/', (req, res) => {
+  res.json({
+    name: 'TypeORM API Server',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      reference: '/reference',
+      customers: '/api/customers',
+      products: '/api/products',
+      orders: '/api/orders',
+      orderItems: '/api/order-items',
+    },
+  });
 });
 
-// ============================================================================
-// SHARED ROUTES
-// ============================================================================
-
-// Use shared routes
-app.use('/', createRootRoutes(APP_NAME, VERSION));
-app.use('/', createHealthRoutes(APP_NAME, VERSION));
-app.use('/utils', createUtilityRoutes());
-// // Add docs route with placeholder URL (will be updated with actual port)
-// app.use('/docs', createDocsRoutes(APP_NAME, VERSION, `http://localhost:${DEFAULT_PORT}`));
+// Health check
+app.get('/health', (req, res) => {
+  const isDbConnected = AppDataSource.isInitialized;
+  res.status(isDbConnected ? 200 : 503).json({
+    status: isDbConnected ? 'healthy' : 'unhealthy',
+    database: isDbConnected ? 'connected' : 'disconnected',
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // ============================================================================
 // SCALAR API REFERENCE (Development Only)
@@ -652,46 +587,102 @@ if (isDevelopment) {
   console.log('📚 Scalar API documentation available at /reference (development only)');
 }
 
-// Error handling middleware (must be last)
-app.use(errorHandler);
-app.use(notFoundHandler);
+// ============================================================================
+// ERROR HANDLING (must be last)
+// ============================================================================
 
-// Initialize database and start server
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    error: 'Route not found',
+    path: req.path,
+  });
+});
+
+// Error handler
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error('Error:', err.message);
+  console.error(err.stack);
+
+  res.status(500).json({
+    success: false,
+    error: isDevelopment ? err.message : 'Internal server error',
+    ...(isDevelopment && { stack: err.stack }),
+  });
+});
+
+// ============================================================================
+// SERVER STARTUP
+// ============================================================================
+
+let server: any;
+
 async function startServer() {
   try {
-    console.log('Initializing TypeORM...');
+    console.log('🔌 Connecting to PostgreSQL...');
 
-    // Check if database is already initialized
+    // Initialize database connection
     if (!AppDataSource.isInitialized) {
       await AppDataSource.initialize();
-      console.log('Data Source has been initialized!');
+      console.log('✅ Connected to PostgreSQL');
     } else {
-      console.log('Data Source already initialized!');
+      console.log('✅ Already connected to PostgreSQL');
     }
 
-    // Start the idempotent server
-    const port = await idempotentServer.start();
+    // Verify tables exist (helpful error if setup-db wasn't run)
+    const queryRunner = AppDataSource.createQueryRunner();
+    try {
+      const result = await queryRunner.query(
+        "SELECT 1 FROM information_schema.tables WHERE table_name = 'customers' LIMIT 1"
+      );
+      if (result.length === 0) {
+        console.error('\n❌ Database tables not found!');
+        console.error('   Run this first: pnpm setup-db\n');
+        process.exit(1);
+      }
+    } finally {
+      await queryRunner.release();
+    }
+
+    // Start HTTP server
+    server = app.listen(DEFAULT_PORT, () => {
+      console.log(`\n🚀 TypeORM API Server running on http://localhost:${DEFAULT_PORT}`);
+      console.log(`📚 API Documentation: http://localhost:${DEFAULT_PORT}/reference`);
+      console.log(`💚 Health Check: http://localhost:${DEFAULT_PORT}/health\n`);
+    });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    console.error('❌ Failed to start server:', error);
+    console.error('   Make sure to run: pnpm setup-db');
     process.exit(1);
   }
 }
 
-// Graceful shutdown is handled by the idempotent server
-// Custom shutdown logic for database cleanup
-process.on('SIGINT', async () => {
-  if (AppDataSource.isInitialized) {
-    await AppDataSource.destroy();
-    console.log('Database connection closed');
-  }
-});
+// ============================================================================
+// GRACEFUL SHUTDOWN
+// ============================================================================
 
-process.on('SIGTERM', async () => {
+async function shutdown() {
+  console.log('\n🛑 Shutting down gracefully...');
+
+  // Close HTTP server
+  if (server) {
+    server.close(() => {
+      console.log('✅ HTTP server closed');
+    });
+  }
+
+  // Close database connection
   if (AppDataSource.isInitialized) {
     await AppDataSource.destroy();
-    console.log('Database connection closed');
+    console.log('✅ Database connection closed');
   }
-});
+
+  process.exit(0);
+}
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 // Start the server
 startServer();

@@ -7,7 +7,6 @@
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "./src",
     "composite": true,
     "removeComments": true,
     "esModuleInterop": true,
@@ -24,6 +23,6 @@
       }
     ]
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "app/**/*"],
   "exclude": ["node_modules", "dist"]
 }

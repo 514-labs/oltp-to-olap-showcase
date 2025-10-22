@@ -4,8 +4,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = "postgresql://postgres:postgres@localhost:5432/postgres"
 }
 
 // OLTP Models
@@ -46,4 +46,19 @@ model OrderItem {
   product   Product @relation(fields: [productId], references: [id])
   quantity  Int
   price     Float
+}
+
+
+model CustomerAddress {
+  id           Int      @id @default(autoincrement())
+  firstName   String   @db.VarChar(100)
+  last_name    String   @db.VarChar(100)
+  email        String   @db.VarChar(255)
+  res_address  String?  @db.Text
+  work_address String?  @db.Text
+  country      String?  @db.VarChar(100)
+  state        String?  @db.VarChar(100)
+  phone_1      String?  @db.VarChar(20)
+  phone_2      String?  @db.VarChar(20)
+  updatedAt    DateTime @default(now())
 }

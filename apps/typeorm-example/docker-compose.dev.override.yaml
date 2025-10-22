@@ -1,0 +1,95 @@
+# Moose CDC Extension - Docker Compose Override
+#
+# This file extends the base Moose infrastructure with CDC capabilities.
+# It connects to your existing OLTP PostgreSQL database and streams changes.
+#
+# Prerequisites:
+#   1. OLTP application must be running: ./start-oltp.sh
+#   2. PostgreSQL must be accessible on the oltp-network
+#   3. REDPANDA_LICENSE must be set: export REDPANDA_LICENSE="your_key"
+#
+# Start: moose dev
+
+services:
+  # CDC Setup - Creates publication and replication slot in OLTP PostgreSQL
+  # Connects to the external OLTP database and sets up CDC infrastructure
+  cdc-setup:
+    image: postgres:15-alpine
+    container_name: redpanda-pg-cdc-setup
+    environment:
+      PGHOST: typeorm-oltp-postgres
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: typeorm_db
+    volumes:
+      - ../init-postgres.sh:/init-postgres.sh:ro
+    command: >
+      sh -c "
+        echo '🔍 Checking OLTP database connection...';
+
+        # Wait for PostgreSQL to be accessible
+        for i in 1 2 3 4 5 6 7 8 9 10; do
+          if psql -c 'SELECT 1' > /dev/null 2>&1; then
+            echo '✅ Connected to OLTP PostgreSQL';
+            break;
+          fi;
+          if [ $$i -eq 10 ]; then
+            echo '❌ Cannot connect to OLTP PostgreSQL';
+            echo '   Make sure to start OLTP first: ./start-oltp.sh';
+            exit 1;
+          fi;
+          echo \"  Attempt $$i/10: PostgreSQL not accessible, waiting 3s...\";
+          sleep 3;
+        done;
+
+        echo '';
+        echo '⏳ Waiting for OLTP tables to exist...';
+        for i in 1 2 3 4 5 6 7 8 9 10; do
+          if psql -tAc \"SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='customers'\" | grep -q 1; then
+            echo '✅ OLTP tables found';
+            echo '';
+            echo '📡 Creating CDC publication...';
+            /init-postgres.sh;
+            exit 0;
+          fi;
+          if [ $$i -eq 10 ]; then
+            echo '❌ OLTP tables not found after 30s';
+            echo '   Tables must exist before CDC can be set up.';
+            echo '   The tables should have been created by ./start-oltp.sh';
+            exit 1;
+          fi;
+          echo \"  Attempt $$i/10: Tables not found, waiting 3s...\";
+          sleep 3;
+        done;
+      "
+    restart: "no"
+    networks:
+      - oltp-network
+
+  # CDC Connector - Redpanda Connect with PostgreSQL CDC
+  # Streams changes from OLTP PostgreSQL to Redpanda topics
+  # Requires: REDPANDA_LICENSE environment variable
+  redpanda-connect:
+    image: docker.redpanda.com/redpandadata/connect:latest
+    container_name: redpanda-connect
+    depends_on:
+      cdc-setup:
+        condition: service_completed_successfully
+    volumes:
+      - ../redpanda-connect.yaml:/connect.yaml:ro
+    command: ["run", "/connect.yaml"]
+    ports:
+      - "4195:4195" # HTTP API for health checks and metrics
+    environment:
+      REDPANDA_LICENSE: ${REDPANDA_LICENSE:-}
+      LOG_LEVEL: "info"
+    networks:
+      - oltp-network # Connect to OLTP PostgreSQL
+      - default # Connect to Moose Redpanda
+
+# External networks
+networks:
+  oltp-network:
+    external: true
+    name: oltp-network

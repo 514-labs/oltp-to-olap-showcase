@@ -1,0 +1,38 @@
+# Redpanda Connect PostgreSQL CDC Configuration
+#
+# The postgres_cdc input automatically adds metadata to each message:
+# - meta("table")     - table name where the change occurred
+# - meta("operation") - operation type (read, insert, update, delete)
+# - meta("lsn")       - PostgreSQL Log Sequence Number
+
+input:
+  postgres_cdc:
+    dsn: 'postgres://postgres:postgres@typeorm-oltp-postgres:5432/typeorm_db?sslmode=disable'
+    schema: 'public'
+    slot_name: 'redpanda_cdc_slot'
+    tables:
+      - 'customers'
+      - 'products'
+      - 'orders'
+      - 'order_items'
+
+pipeline:
+  processors:
+    # Copy metadata into payload for easier access in Moose streaming functions
+    - mapping: |
+        root = this
+        root._metadata = {
+          "table": meta("table"),
+          "operation": meta("operation"),
+          "lsn": meta("lsn")
+        }
+
+output:
+  kafka:
+    addresses:
+      - 'redpanda:9092'
+    topic: 'typeorm_cdc_events'
+    max_in_flight: 1
+
+http:
+  address: '0.0.0.0:4195'
