@@ -1,0 +1,31 @@
+input:
+  postgres_cdc:
+    dsn: 'postgres://postgres:postgres@sqlalchemy-oltp-postgres:5432/sqlalchemy_db?sslmode=disable'
+    schema: 'public'
+    slot_name: 'redpanda_cdc_slot'
+    tables:
+      - 'customers'
+      - 'products'
+      - 'orders'
+      - 'order_items'
+
+pipeline:
+  processors:
+    # Copy metadata into payload for easier access in Moose streaming functions
+    - mapping: |
+        root = this
+        root._metadata = {
+          "table": meta("table"),
+          "operation": meta("operation"),
+          "lsn": meta("lsn")
+        }
+
+output:
+  kafka:
+    addresses:
+      - 'redpanda:9092'
+    topic: 'sqlalchemy_cdc_events'
+    max_in_flight: 1
+
+http:
+  address: '0.0.0.0:4195'

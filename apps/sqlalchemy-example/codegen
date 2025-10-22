@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+"""
+CLI wrapper for schema code generation
+
+Usage:
+    ./codegen generate           # Generate schemas
+    python codegen generate      # Alternative
+    uv run python codegen generate   # With uv
+"""
+
+import sys
+from src.utils.codegen import main
+
+if __name__ == "__main__":
+    main()
+

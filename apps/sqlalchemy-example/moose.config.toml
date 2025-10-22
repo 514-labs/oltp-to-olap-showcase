@@ -1,10 +1,7 @@
+name = "sqlalchemy to olap"
 language = "Typescript"
-source_dir = "moose"
-
 
 [typescript_config]
-# Package manager to use for installing dependencies
-# Options: "npm" (default), "pnpm", "yarn"
 package_manager = "pnpm"
 
 [redpanda_config]
@@ -24,9 +21,8 @@ native_port = 9000
 
 [http_server_config]
 host = "localhost"
-port = 4000
-management_port = 5001
-on_first_start_script = "./moose-cdc-setup.sh"
+port = 4002
+management_port = 5002
 
 [redis_config]
 url = "redis://127.0.0.1:6379"
@@ -40,13 +36,11 @@ db_user = "temporal"
 db_password = "temporal"
 db_port = 5432
 temporal_port = 7233
-# Uncomment and set to "http" or "https" to force a specific scheme
-# temporal_scheme = "https"
 temporal_version = "1.22.3"
 admin_tools_version = "1.22.3"
 ui_version = "2.21.3"
 ui_port = 8080
-ui_cors_origins = "http://localhost:3000"
+ui_cors_origins = "http://localhost:3002"
 config_path = "config/dynamicconfig/development-sql.yaml"
 postgresql_version = "13"
 

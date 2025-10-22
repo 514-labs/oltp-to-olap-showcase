@@ -23,6 +23,6 @@
       }
     ]
   },
-  "include": ["src/**/*", "app/**/*"],
+  "include": ["src/**/*", "moose/**/*"],
   "exclude": ["node_modules", "dist"]
 }

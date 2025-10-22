@@ -16,7 +16,7 @@ Transform TypeORM entities into denormalized OLAP tables with real-time CDC repl
 
 ## 🚀 Quick Start
 
-⚠️ **Requires [Redpanda Enterprise License](LICENSE_SETUP.md)** - Free 30-day trial available
+⚠️ **Requires [Redpanda Enterprise License](./docs/LICENSE_SETUP.md)** - Free 30-day trial available
 
 ### 1. Set License
 
@@ -42,6 +42,7 @@ pnpm dev         # Starts API server
 ```
 
 **What happens:**
+
 - PostgreSQL starts with logical replication enabled
 - Tables created via TypeORM
 - CDC publication created automatically
@@ -90,11 +91,13 @@ SELECT * FROM local.order_fact LIMIT 10;
 ## 📖 Documentation
 
 ### Essential Guides
+
 - **[Quick Start](docs/MOOSE_CDC_QUICKSTART.md)** - Get running in 5 minutes
 - **[License Setup](LICENSE_SETUP.md)** - Get your Redpanda license
 - **[Complete Setup Guide](docs/SETUP_GUIDE.md)** - Detailed setup with troubleshooting
 
 ### Architecture & Design
+
 - **[CDC Pipeline Design](docs/CDC_PIPELINE_DESIGN.md)** - How the CDC pipeline works
 - **[OLAP Conversion Guide](docs/OLAP_CONVERSION_GUIDE.md)** - TypeORM → Moose patterns
 - **[Fact Table Strategy](docs/FACT_TABLE_STRATEGY.md)** - Denormalization patterns
@@ -147,7 +150,7 @@ export class Order {
   @ManyToOne(() => Customer)
   customer: Customer;
 
-  @OneToMany(() => OrderItem, item => item.order)
+  @OneToMany(() => OrderItem, (item) => item.order)
   items: OrderItem[];
 }
 ```
@@ -159,15 +162,15 @@ export class Order {
 export interface OrderFact {
   order_id: UInt64;
   customer_id: UInt64;
-  customer_name: string;      // Denormalized!
-  customer_email: string;     // Denormalized!
+  customer_name: string; // Denormalized!
+  customer_email: string; // Denormalized!
   status: string;
   total: Float64;
   order_date: DateTime;
 }
 
 export const OrderFact = new OlapTable<OrderFact>('order_fact', {
-  orderByFields: ['order_date', 'order_id']
+  orderByFields: ['order_date', 'order_id'],
 });
 ```
 
@@ -182,25 +185,31 @@ Order              Capture           Stream            Transform         Insert
 ## 🚨 Common Issues
 
 ### "Waiting for tables" persists
+
 **Solution:** Run `pnpm dev` to start the API and create tables
 
 ### Redpanda Connect won't start
+
 **Solution:** Check license is set: `echo $REDPANDA_LICENSE`
 
 ### Publication errors
+
 **Solution:** See [Troubleshooting Guide](docs/SETUP_GUIDE.md#troubleshooting)
 
 ### More issues?
+
 Check the **[Complete Setup Guide](docs/SETUP_GUIDE.md)** for detailed troubleshooting.
 
 ## 🔗 Useful Links
 
 **API Endpoints:**
+
 - API Server: http://localhost:3000
 - API Documentation: http://localhost:3000/reference
 - Redpanda Connect Health: http://localhost:4195/ready
 
 **Admin UIs:**
+
 - Moose Console: http://localhost:5001
 - Test Client: http://localhost:3001
 

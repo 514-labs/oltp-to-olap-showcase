@@ -11,10 +11,9 @@
  */
 
 import { OlapTable, ClickHouseEngines, MaterializedView, sql } from '@514labs/moose-lib';
-import { OrderFact, CdcFields } from './models';
-import { OrderItemTable } from './sinkTables';
+import { OrderFact, CdcFields, OrderDimension, OrderItemFact } from './models';
 import { Dictionary } from './dictionaryBuilder';
-
+import { OrderDimensionTable, OrderItemTable } from './sinkTables';
 // ============================================================================
 // CUSTOMER DICTIONARY
 // ============================================================================
@@ -67,7 +66,7 @@ export const dictOrders = Dictionary('dict_orders', {
   },
 });
 
-export const OrderFactEnriched = new OlapTable<OrderFact & CdcFields>('order_fact_enriched', {
+export const JoinedOrders = new OlapTable<OrderFact & CdcFields>('joined_orders', {
   engine: ClickHouseEngines.ReplacingMergeTree,
   orderByFields: ['id'],
   ver: 'lsn',
@@ -75,13 +74,13 @@ export const OrderFactEnriched = new OlapTable<OrderFact & CdcFields>('order_fac
 });
 
 export const OrderFactEnrichedView = new MaterializedView<OrderFact & CdcFields>({
-  materializedViewName: 'to_order_fact_enriched',
+  materializedViewName: 'join_orders_mv',
   selectStatement: sql`
     SELECT
-    ${OrderFactEnriched.columns.id},
-    ${OrderItemTable.columns.orderId},
-    ${OrderItemTable.columns.productId},
-    ${OrderItemTable.columns.quantity},
+    ${OrderItemTable.columns.id} as id,
+    ${OrderItemTable.columns.orderId} as orderId,
+    ${OrderItemTable.columns.productId} as productId,
+    ${OrderItemTable.columns.quantity} as quantity,
     ${OrderItemTable.columns.price} as unitPrice,
     ${OrderItemTable.columns.quantity} * ${OrderItemTable.columns.price} as revenue,
 
@@ -104,8 +103,7 @@ export const OrderFactEnrichedView = new MaterializedView<OrderFact & CdcFields>
     ${OrderItemTable.columns.is_deleted},
     ${OrderItemTable.columns.lsn}
     FROM ${OrderItemTable} oi
-    WHERE is_deleted = 0
     `,
   selectTables: [OrderItemTable, dictCustomers, dictProducts, dictOrders],
-  targetTable: OrderFactEnriched,
+  targetTable: JoinedOrders,
 });

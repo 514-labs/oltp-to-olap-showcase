@@ -1,17 +1,27 @@
 # OLTP to OLAP Showcase
 
-**Real-time CDC pipeline: PostgreSQL (TypeORM) → Redpanda → Moose → ClickHouse**
+**Real-time CDC pipeline: PostgreSQL (TypeORM/SQLAlchemy) → Redpanda → Moose → ClickHouse**
 
-Stream changes from your OLTP database to OLAP analytics in real-time using Change Data Capture.
+Stream changes from your OLTP database to OLAP analytics in real-time using Change Data Capture. **Two complete implementations** showing the same architecture with different ORMs!
 
 ## 🎯 What This Is
 
-A complete working example of:
+Two complete working examples of OLTP → OLAP with CDC:
 
+### TypeScript/TypeORM Example
 - **TypeORM entities** (OLTP) → **Moose OlapTables** (OLAP)
+- Express API with Scalar OpenAPI docs
+- Port 3000
+
+### Python/SQLAlchemy Example
+- **SQLAlchemy models** (OLTP) → **Moose OlapTables** (OLAP)
+- FastAPI with auto-generated Swagger docs
+- Port 3002
+
+**Both feature:**
 - **Real-time CDC** using Redpanda Connect PostgreSQL CDC connector
 - **Automatic denormalization** for fast analytics
-- **Test client** to trigger CDC events
+- **Identical CDC pipeline architecture**
 
 **Architecture:** PostgreSQL → Redpanda Connect → Redpanda → Moose Flows → ClickHouse
 
@@ -19,13 +29,17 @@ A complete working example of:
 
 ⚠️ **Requires Redpanda Enterprise License** - [Get a free 30-day trial](https://redpanda.com/try-enterprise)
 
+Choose your preferred stack:
+
+### Option 1: TypeScript + TypeORM
+
 ```bash
 # Clone and install
 git clone <your-repo-url>
 cd oltp-to-olap-showcase
 pnpm install
 
-# Navigate to the TypeORM CDC example
+# Navigate to the TypeORM example
 cd apps/typeorm-example
 
 # Set your Redpanda license
@@ -43,28 +57,66 @@ cd ../test-client
 pnpm dev
 ```
 
-**What you'll see:**
-
-- PostgreSQL with TypeORM entities
-- CDC streaming changes in real-time
-- ClickHouse tables automatically updated
-- Test UI to create/update/delete orders
-
 **Visit:**
-
 - API: http://localhost:3000
 - API Docs: http://localhost:3000/reference
 - Test Client: http://localhost:3001
+
+### Option 2: Python + SQLAlchemy
+
+```bash
+# Clone and install
+git clone <your-repo-url>
+cd oltp-to-olap-showcase
+
+# Navigate to the SQLAlchemy example
+cd apps/sqlalchemy-example
+
+# Create virtual environment and install dependencies
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -e .
+
+# Set your Redpanda license
+export REDPANDA_LICENSE="your_license_key_here"
+
+# Terminal 1: Start PostgreSQL
+./start-oltp.sh
+
+# Terminal 2: Start Moose (keeps running)
+moose dev
+
+# Terminal 3: Start FastAPI application
+python -m uvicorn src.main:app --reload --port 3002
+```
+
+**Visit:**
+- API: http://localhost:3002
+- API Docs: http://localhost:3002/docs
+- ReDoc: http://localhost:3002/redoc
+
+**What you'll see in both:**
+
+- PostgreSQL with ORM models (TypeORM/SQLAlchemy)
+- CDC streaming changes in real-time
+- ClickHouse tables automatically updated
+- REST API with interactive documentation
 
 ## 📖 Documentation
 
 ### Getting Started
 
-- **[TypeORM Example](apps/typeorm-example/README.md)** - Main project README
+**TypeScript/TypeORM:**
+- **[TypeORM Example README](apps/typeorm-example/README.md)** - Complete setup guide
 - **[Quick Start Guide](apps/typeorm-example/docs/MOOSE_CDC_QUICKSTART.md)** - 5-minute setup
 - **[License Setup](apps/typeorm-example/LICENSE_SETUP.md)** - Get your Redpanda license
 
-### Detailed Guides
+**Python/SQLAlchemy:**
+- **[SQLAlchemy Example README](apps/sqlalchemy-example/README.md)** - Complete setup guide
+- **[SQLAlchemy to OLAP Guide](apps/sqlalchemy-example/docs/SQLALCHEMY_TO_OLAP_GUIDE.md)** - Conversion patterns
+- **[Setup Summary](apps/sqlalchemy-example/SETUP_SUMMARY.md)** - What was created
+
+### Detailed Guides (TypeORM)
 
 - **[Complete Setup Guide](apps/typeorm-example/docs/SETUP_GUIDE.md)** - Step-by-step with troubleshooting
 - **[CDC Pipeline Design](apps/typeorm-example/docs/CDC_PIPELINE_DESIGN.md)** - Architecture deep dive
@@ -76,11 +128,17 @@ pnpm dev
 ```
 oltp-to-olap-showcase/
 ├── apps/
-│   ├── typeorm-example/      ✅ Complete CDC demo
+│   ├── typeorm-example/      ✅ TypeScript/Node.js CDC demo
 │   │   ├── src/              # TypeORM OLTP entities & API
 │   │   ├── app/              # Moose OLAP table definitions
 │   │   ├── docs/             # Complete documentation
 │   │   ├── *.sh              # Setup scripts
+│   │   └── *.yaml            # Docker compose configs
+│   │
+│   ├── sqlalchemy-example/   ✅ Python CDC demo
+│   │   ├── src/              # SQLAlchemy OLTP models & API
+│   │   ├── app/              # Moose OLAP table definitions
+│   │   ├── docs/             # Conversion guide
 │   │   └── *.yaml            # Docker compose configs
 │   │
 │   └── test-client/          ✅ React UI for testing
@@ -92,8 +150,9 @@ oltp-to-olap-showcase/
 
 ## 🎓 How It Works
 
-### 1. OLTP Models (TypeORM)
+### 1. OLTP Models
 
+**TypeORM (TypeScript):**
 ```typescript
 // src/entities/Order.ts
 @Entity()
@@ -107,6 +166,19 @@ export class Order {
   @OneToMany(() => OrderItem, (item) => item.order)
   items: OrderItem[];
 }
+```
+
+**SQLAlchemy (Python):**
+```python
+# src/models/order.py
+class Order(Base):
+    __tablename__ = "orders"
+
+    id = Column(Integer, primary_key=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"))
+
+    customer = relationship("Customer", back_populates="orders")
+    items = relationship("OrderItem", back_populates="order")
 ```
 
 ### 2. CDC Stream (PostgreSQL WAL)
@@ -205,12 +277,21 @@ Every database change is:
 
 ## 🛠️ Technology Stack
 
-- **OLTP:** PostgreSQL + TypeORM
+**Common Infrastructure:**
 - **CDC:** Redpanda Connect (PostgreSQL CDC connector)
 - **Streaming:** Redpanda (Kafka API)
 - **OLAP:** Moose + ClickHouse
-- **API:** Express + Scalar (OpenAPI docs)
 - **Test Client:** React + Vite + shadcn/ui
+
+**TypeORM Example:**
+- **OLTP:** PostgreSQL + TypeORM
+- **API:** Express + Scalar (OpenAPI docs)
+- **Language:** TypeScript
+
+**SQLAlchemy Example:**
+- **OLTP:** PostgreSQL + SQLAlchemy 2.0
+- **API:** FastAPI + Uvicorn + Pydantic
+- **Language:** Python 3.10+
 
 ## 📚 Key Concepts
 
@@ -240,11 +321,19 @@ MIT
 
 ## 🔗 Learn More
 
+**Framework Documentation:**
 - [Moose Documentation](https://docs.fiveonefour.com/moose/)
 - [Redpanda Connect](https://docs.redpanda.com/redpanda-connect/)
 - [ClickHouse Docs](https://clickhouse.com/docs/)
+
+**ORM & API Frameworks:**
 - [TypeORM](https://typeorm.io/)
+- [SQLAlchemy](https://docs.sqlalchemy.org/)
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [Express](https://expressjs.com/)
 
 ---
 
-**Ready to get started?** → [TypeORM Example](apps/typeorm-example/README.md)
+**Ready to get started?** Choose your stack:
+- 🟦 [TypeScript/TypeORM Example](apps/typeorm-example/README.md)
+- 🐍 [Python/SQLAlchemy Example](apps/sqlalchemy-example/README.md)
