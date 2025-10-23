@@ -13,7 +13,7 @@ Conversion Rules:
 """
 
 from datetime import datetime
-from typing import Literal, Annotated
+from typing import Literal, Annotated, TypeVar, Generic
 from pydantic import BaseModel
 from moose_lib import Key
 
@@ -26,11 +26,25 @@ class RedpandaPgCdcMetadata(BaseModel):
     lsn: str  # PostgreSQL LSN as hex string
 
 
-class RedpandaPgCdcPayload(BaseModel):
+# Generic type variable for table data models
+T = TypeVar('T', bound=BaseModel)
+
+
+class RedpandaPgCdcPayload(BaseModel, Generic[T]):
     """
-    CDC event payload structure from Redpanda Connect
-    Generic wrapper for all table CDC events
+    Generic CDC event payload structure from Redpanda Connect
+    
+    Type parameter T represents the specific table model (Customer, Product, etc.)
+    
+    Structure:
+    - _metadata: CDC metadata (table, operation, lsn)
+    - All fields from type T (the actual table data)
+    
+    Example:
+        RedpandaPgCdcPayload[CustomerDimension] for customer CDC events
     """
+    model_config = {"extra": "allow"}  # Allow additional fields from table data
+    
     _metadata: RedpandaPgCdcMetadata
 
 

@@ -5,12 +5,17 @@ Redpanda Connect streams CDC events from PostgreSQL to these topics.
 Topic: sqlalchemy_cdc_events
 """
 
-from moose_lib import Stream, LifeCycle
-from app.models import RedpandaPgCdcPayload
+from moose_lib import Stream, StreamConfig, LifeCycle, Logger
+from pydantic import BaseModel
 
+class SqlAlchemyCdcEvents(BaseModel):
+    pass
 
 # External CDC event stream from Redpanda Connect
-SqlAlchemyCdcEventsStream = Stream[RedpandaPgCdcPayload](
+SqlAlchemyCdcEventsStream = Stream[SqlAlchemyCdcEvents](
     name='sqlalchemy_cdc_events',
-    lifecycle=LifeCycle.EXTERNALLY_MANAGED
+    config=StreamConfig(
+        life_cycle=LifeCycle.EXTERNALLY_MANAGED
+    )
 )
+

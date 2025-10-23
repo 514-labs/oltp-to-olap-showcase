@@ -8,7 +8,7 @@ Converts Redpanda Connect CDC events to OLAP format:
 - Routes events by table name to appropriate dimension/fact streams
 """
 
-from typing import Dict, Any, TypeVar, Generic
+from typing import Dict, Any, TypeVar, Generic, Union, cast
 from moose_lib import Logger, ConsumerConfig
 from app.models import (
     CustomerDimension,
@@ -16,6 +16,7 @@ from app.models import (
     OrderDimension,
     OrderItemFact,
     RedpandaPgCdcPayload,
+    CdcFields,
 )
 from app.sources.external_topics import SqlAlchemyCdcEventsStream
 from app.sinks.topics import (
@@ -27,46 +28,51 @@ from app.sinks.topics import (
 )
 
 
-T = TypeVar('T')
+T = TypeVar('T', bound=CdcFields)
 
 
-def transform_cdc_payload(event: Dict[str, Any]) -> Dict[str, Any]:
+def transform_cdc_payload(event: RedpandaPgCdcPayload[T], target_model: type[T]) -> T:
     """
-    Transform CDC event payload by:
-    1. Extracting _metadata
-    2. Converting LSN from hex string to integer
-    3. Adding is_deleted flag based on operation type
+    Transform CDC event payload to a typed OLAP model.
+    
+    Performs:
+    1. Extracts _metadata
+    2. Converts LSN from hex string to integer
+    3. Adds is_deleted flag based on operation type
+    4. Returns typed instance of target model
     
     Args:
-        event: Raw CDC event with _metadata field
+        event: CDC event with _metadata and table fields
+        target_model: Target dimension/fact model class
         
     Returns:
-        Transformed payload with CDC fields
+        Typed instance with CDC fields populated
     """
     logger = Logger("CDC Transform")
     logger.info(f"{event}")
     
     # Extract metadata
-    metadata = event.get('_metadata', {})
-    operation = metadata.get('operation', 'insert')
-    lsn_hex = metadata.get('lsn', '0')
+    metadata = event._metadata
+    operation = metadata.operation
+    lsn_hex = metadata.lsn
     
     # Convert LSN from hex to integer
     lsn = int(lsn_hex, 16) if lsn_hex else 0
     
-    # Remove metadata from payload
-    payload = {k: v for k, v in event.items() if k != '_metadata'}
+    # Get all fields except _metadata
+    payload_dict = event.model_dump(exclude={'_metadata'})
     
-    logger.info(f"{payload}")
+    logger.info(f"{payload_dict}")
     
     # Add CDC fields
-    payload['is_deleted'] = 1 if operation == 'delete' else 0
-    payload['lsn'] = lsn
+    payload_dict['is_deleted'] = 1 if operation == 'delete' else 0
+    payload_dict['lsn'] = lsn
     
-    return payload
+    # Return typed model instance
+    return target_model(**payload_dict)
 
 
-def process_cdc_events(event: Any) -> None:
+def process_cdc_events(event: RedpandaPgCdcPayload[Any]) -> None:
     """
     Main CDC event processor
     
@@ -75,30 +81,33 @@ def process_cdc_events(event: Any) -> None:
     """
     logger = Logger("CDC Process")
     
-    cdc_event = event
-    
-    # Determine table and route to appropriate stream
-    metadata = cdc_event.get('_metadata', {})
-    table_name = metadata.get('table', '')
+    # Determine table from metadata
+    metadata = event._metadata
+    table_name = metadata.table
     
     try:
-        processed_payload = transform_cdc_payload(cdc_event)
-        
         if table_name == 'products':
-            logger.info(f"{processed_payload}")
-            ProductDimensionStream.send(ProductDimension(**processed_payload))
+            processed = transform_cdc_payload(event, ProductDimension)
+            logger.info(f"{processed}")
+            ProductDimensionStream.send(processed)
             
         elif table_name == 'customers':
-            logger.info(f"{processed_payload}")
-            CustomerDimensionStream.send(CustomerDimension(**processed_payload))
+            typed_event = cast(RedpandaPgCdcPayload[CustomerDimension], event)
+            processed = transform_cdc_payload(typed_event, CustomerDimension)
+            logger.info(f"{processed}")
+            CustomerDimensionStream.send(processed)
             
         elif table_name == 'orders':
-            logger.info(f"{processed_payload}")
-            OrderDimensionStream.send(OrderDimension(**processed_payload))
+            typed_event = cast(RedpandaPgCdcPayload[OrderDimension], event)
+            processed = transform_cdc_payload(typed_event, OrderDimension)
+            logger.info(f"{processed}")
+            OrderDimensionStream.send(processed)
             
         elif table_name == 'order_items':
-            logger.info(f"{processed_payload}")
-            OrderItemStream.send(OrderItemFact(**processed_payload))
+            typed_event = cast(RedpandaPgCdcPayload[OrderItemFact], event)
+            processed = transform_cdc_payload(typed_event, OrderItemFact)
+            logger.info(f"{processed}")
+            OrderItemStream.send(processed)
             
         else:
             raise ValueError(f"Unknown table: {table_name}")

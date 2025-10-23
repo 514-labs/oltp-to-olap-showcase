@@ -1,6 +1,5 @@
 name = "sqlalchemy to olap"
 language = "Python"
-source_dir = "app"
 
 [python_config]
 package_manager = "pip"
