@@ -155,7 +155,7 @@ SqlAlchemyCdcEventsStream.add_consumer(
 )
 
 
-# Additional consumers for logging
+# # Additional consumers for logging
 def log_customer_dimension(event: CustomerDimension) -> None:
     """Log customer dimension events"""
     logger = Logger("Customer Dimension")
@@ -174,7 +174,7 @@ def log_unknown_event(event: Any) -> None:
     logger.info(f"{event}")
 
 
-# Register logging consumers
+# # Register logging consumers
 CustomerDimensionStream.add_consumer(log_customer_dimension)
 ProductDimensionStream.add_consumer(log_product_dimension)
 UnknownEventDeadLetterTopic.add_consumer(log_unknown_event)
