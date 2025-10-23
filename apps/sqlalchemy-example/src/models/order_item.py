@@ -2,9 +2,19 @@
 OrderItem Model (Fact Table in OLAP)
 """
 
-from sqlalchemy import Column, Integer, Numeric, ForeignKey
-from sqlalchemy.orm import relationship
+from __future__ import annotations
+
+from decimal import Decimal
+from typing import TYPE_CHECKING
+
+from sqlalchemy import ForeignKey, Integer, Numeric
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from .base import Base
+
+if TYPE_CHECKING:  # pragma: no cover
+    from .order import Order
+    from .product import Product
 
 
 class OrderItem(Base):
@@ -17,17 +27,21 @@ class OrderItem(Base):
     - Convert all IDs to UInt64
     - Will be enriched with dimension attributes via dictionaries
     """
+
     __tablename__ = "order_items"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False, index=True)
-    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
-    quantity = Column(Integer, nullable=False)
-    price = Column(Numeric(10, 2), nullable=False)  # Unit price at time of purchase
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), nullable=False, index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False, index=True)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)  # Unit price at time of purchase
 
     # Relationships (removed in OLAP)
-    order = relationship("Order", back_populates="items")
-    product = relationship("Product", back_populates="order_items")
+    order: Mapped["Order"] = relationship("Order", back_populates="items")  # type: ignore
+    product: Mapped["Product"] = relationship("Product", back_populates="order_items")  # type: ignore
 
     def __repr__(self) -> str:
-        return f"<OrderItem(id={self.id}, order_id={self.order_id}, product_id={self.product_id}, qty={self.quantity})>"
+        return (
+            f"<OrderItem(id={self.id}, order_id={self.order_id}, "
+            f"product_id={self.product_id}, qty={self.quantity})>"
+        )

@@ -9,10 +9,9 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List
-
-from . import schemas
 from .models import base, Customer, Product, Order, OrderItem
 
+import schemas
 # Initialize FastAPI app
 app = FastAPI(
     title="SQLAlchemy OLTP API",

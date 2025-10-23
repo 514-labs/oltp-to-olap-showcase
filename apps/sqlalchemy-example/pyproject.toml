@@ -2,7 +2,7 @@
 name = "sqlalchemy-cdc-example"
 version = "1.0.0"
 description = "SQLAlchemy to Moose OLAP CDC pipeline example"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.109.0",
     "uvicorn[standard]>=0.27.0",

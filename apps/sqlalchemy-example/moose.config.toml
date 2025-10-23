@@ -1,8 +1,9 @@
 name = "sqlalchemy to olap"
-language = "Typescript"
+language = "Python"
+source_dir = "app"
 
-[typescript_config]
-package_manager = "pnpm"
+[python_config]
+package_manager = "pip"
 
 [redpanda_config]
 broker = "localhost:19092"
