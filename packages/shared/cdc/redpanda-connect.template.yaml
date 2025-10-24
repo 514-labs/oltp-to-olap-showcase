@@ -6,7 +6,7 @@ input:
     dsn: ${POSTGRES_CDC_DSN}
     schema: ${POSTGRES_CDC_SCHEMA:-public}
     slot_name: ${POSTGRES_CDC_SLOT:-redpanda_cdc_slot}
-    publication_name: ${POSTGRES_CDC_PUBLICATION:-redpanda_cdc_publication}
+    publication: ${POSTGRES_CDC_PUBLICATION:-redpanda_cdc_publication}
     tables: ${POSTGRES_CDC_TABLES_JSON}
 
 pipeline:
