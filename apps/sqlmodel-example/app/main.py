@@ -1,9 +1,8 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Annotated, Literal, Generic, TypeVar, Any
+from typing import Annotated, Literal, Generic, TypeVar, Any, Optional
 from moose_lib import Stream, StreamConfig
 from moose_lib import OlapTable, OlapConfig, ReplacingMergeTreeEngine, Logger, DeadLetterQueue, ConsumerConfig
-from decimal import Decimal
 
 # ==================== CDC MODELS ====================
 T = TypeVar('T', bound=BaseModel)
@@ -36,38 +35,38 @@ class CdcFields(BaseModel):
 class Customer(CdcFields, BaseModel):
     """Customer Dimension - Converted from SQLAlchemy Customer model"""
     id: int
-    email: str
-    name: str
-    country: str
-    city: str
-    createdAt: datetime
+    email: Optional[str]
+    name: Optional[str]
+    country: Optional[str]
+    city: Optional[str]
+    createdAt: Optional[datetime]
     
 
 class Product(CdcFields, BaseModel):
     """Product Dimension - Converted from SQLAlchemy Product model"""
     id: int
-    name: str
-    category: str
-    price: Decimal
-    createdAt: datetime
+    name: Optional[str]
+    category: Optional[str]
+    price: Optional[float]
+    createdAt: Optional[datetime]
 
 
 class Order(CdcFields, BaseModel):
     """Order Dimension - Converted from SQLAlchemy Order model"""
     id: int
-    customerId: int
-    orderDate: datetime
-    status: str
-    total: Decimal
+    customerId: Optional[int]
+    orderDate: Optional[datetime]
+    status: Optional[str]
+    total: Optional[float]
 
 
 class OrderItem(CdcFields, BaseModel):
     """OrderItem Fact - Converted from SQLAlchemy OrderItem model"""
     id: int
-    orderId: int
-    productId: int
-    quantity: int
-    price: Decimal
+    orderId: Optional[int]
+    productId: Optional[int]
+    quantity: Optional[int]
+    price: Optional[float]
 
 
 # ==================== ENRICHED FACT TABLE ====================
@@ -133,7 +132,7 @@ OrderTable = OlapTable[Order](
 OrderItemTable = OlapTable[OrderItem](
     name="fact_order_item",
     config=OlapConfig(
-        order_by_fields=["id", "orderId", "productId"],
+        order_by_fields=["id"],
         engine=ReplacingMergeTreeEngine(ver="lsn", is_deleted="is_deleted"),
     ),
 )
@@ -182,10 +181,6 @@ OrderItemStream = Stream[OrderItem](
         destination=OrderItemTable,
     )
 )
-
-# import app.transformations as transformations
-## to reproduce the bug, uncomment the following line 
-# sources.SqlAlchemyCdcEventsStream.add_consumer(lambda event: Logger("CDC Events").info(f"{event}"))
 
 # ============================================================================
 # TRANSFORMATIONS

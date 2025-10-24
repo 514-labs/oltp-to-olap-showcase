@@ -1,160 +1,155 @@
 # OLTP to OLAP Showcase
 
-**Real-time CDC pipeline: PostgreSQL (TypeORM/SQLAlchemy) → Redpanda → Moose → ClickHouse**
+**Real-time CDC pipeline: PostgreSQL → Redpanda → Moose → ClickHouse**
 
-Stream changes from your OLTP database to OLAP analytics in real-time using Change Data Capture. **Two complete implementations** showing the same architecture with different ORMs!
+Stream changes from your OLTP database to OLAP analytics in real-time using Change Data Capture. Multiple ORM implementations (TypeORM and SQLModel) showing the same architecture!
 
-## 🎯 What This Is
+## What This Demonstrates
 
-Two complete working examples of OLTP → OLAP with CDC:
+A complete, working example of an OLTP-to-OLAP CDC pipeline with:
 
-### TypeScript/TypeORM Example
-- **TypeORM entities** (OLTP) → **Moose OlapTables** (OLAP)
-- Express API with Scalar OpenAPI docs
-- Port 3000
+- **Real-time Change Data Capture** from PostgreSQL transaction logs
+- **Automatic denormalization** for fast analytical queries
+- **Two production-ready implementations** (TypeORM and SQLModel)
+- **Interactive test client** to see CDC in action
+- **Star schema design** optimized for analytics
 
-### Python/SQLAlchemy Example
-- **SQLAlchemy models** (OLTP) → **Moose OlapTables** (OLAP)
-- FastAPI with auto-generated Swagger docs
-- Port 3002
+## Project Status
 
-**Both feature:**
-- **Real-time CDC** using Redpanda Connect PostgreSQL CDC connector
-- **Automatic denormalization** for fast analytics
-- **Identical CDC pipeline architecture**
+**Production-Ready:**
+- **TypeORM Example** - TypeScript/Node.js with Express API (port 3000)
+- **SQLModel Example** - Python/FastAPI implementation (port 3002)
+  - Uses SQLModel (SQLAlchemy 2.0 + Pydantic) for unified database and validation models
+  - Directory named `sqlalchemy-example` for consistency, but implementation is SQLModel
+- **Test Client** - React UI for testing both backends
 
-**Architecture:** PostgreSQL → Redpanda Connect → Redpanda → Moose Flows → ClickHouse
+**Work in Progress:**
+- **Drizzle Example** - WIP, not yet functional
+- **Prisma Example** - WIP, not yet functional
 
-## 🚀 Quick Start
+## Architecture
 
-⚠️ **Requires Redpanda Enterprise License** - [Get a free 30-day trial](https://redpanda.com/try-enterprise)
-
-Choose your preferred stack:
-
-### Option 1: TypeScript + TypeORM
-
-```bash
-# Clone and install
-git clone <your-repo-url>
-cd oltp-to-olap-showcase
-pnpm install
-
-# Navigate to the TypeORM example
-cd apps/typeorm-example
-
-# Set your Redpanda license
-export REDPANDA_LICENSE="your_license_key_here"
-
-# Terminal 1: Start Moose (ClickHouse + Redpanda + CDC)
-moose dev
-
-# Terminal 2: Start OLTP application
-pnpm start-oltp  # Starts PostgreSQL
-pnpm dev         # Starts API server
-
-# Terminal 3: Start test client (optional)
-cd ../test-client
-pnpm dev
+```
+┌─────────────────┐    WAL     ┌──────────────┐   Kafka    ┌─────────────┐
+│   PostgreSQL    │──────────>│   Redpanda   │──────────>│    Moose    │
+│  (TypeORM/SA)   │            │   Connect    │            │  Functions  │
+└─────────────────┘            └──────────────┘            └──────┬──────┘
+                                                                   │
+                                                             Transform
+                                                                   ↓
+                                                          ┌────────────────┐
+                                                          │   ClickHouse   │
+                                                          │   (Analytics)  │
+                                                          └────────────────┘
 ```
 
-**Visit:**
-- API: http://localhost:3000
-- API Docs: http://localhost:3000/reference
-- Test Client: http://localhost:3001
+## Quick Start
 
-### Option 2: Python + SQLAlchemy
+**Prerequisites:**
+- Docker and Docker Compose
+- Node.js 18+ (for TypeORM) or Python 3.10+ (for SQLModel)
+- Redpanda Enterprise License - [Get a free 30-day trial](https://redpanda.com/try-enterprise)
+
+**New to this?** See the detailed [QUICKSTART.md](QUICKSTART.md) guide for step-by-step instructions.
+
+### TypeScript + TypeORM
 
 ```bash
-# Clone and install
-git clone <your-repo-url>
-cd oltp-to-olap-showcase
+cd apps/typeorm-example
 
-# Navigate to the SQLAlchemy example
-cd apps/sqlalchemy-example
-
-# Create virtual environment and install dependencies
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -e .
-
-# Set your Redpanda license
+# Set Redpanda license
 export REDPANDA_LICENSE="your_license_key_here"
+
+# Terminal 1: Start infrastructure
+moose dev
+
+# Terminal 2: Start API
+pnpm start-oltp && pnpm dev
+```
+
+Visit http://localhost:3000 for API and http://localhost:3000/reference for docs.
+
+### Python + SQLModel
+
+```bash
+cd apps/sqlalchemy-example  # Named for consistency, uses SQLModel
+
+# Set Redpanda license
+export REDPANDA_LICENSE="your_license_key_here"
+
+# Setup (first time only)
+python -m venv venv
+source venv/bin/activate
+pip install -e .
 
 # Terminal 1: Start PostgreSQL
 ./start-oltp.sh
 
-# Terminal 2: Start Moose (keeps running)
+# Terminal 2: Start infrastructure
 moose dev
 
-# Terminal 3: Start FastAPI application
-python -m uvicorn src.main:app --reload --port 3002
+# Terminal 3: Start API
+fastapi dev src/main.py --port 3002
 ```
 
-**Visit:**
-- API: http://localhost:3002
-- API Docs: http://localhost:3002/docs
-- ReDoc: http://localhost:3002/redoc
+Visit http://localhost:3002/docs for interactive API documentation.
 
-**What you'll see in both:**
+**About SQLModel:** Created by FastAPI's author, SQLModel combines SQLAlchemy (database) and Pydantic (validation) into a single, type-safe model. See the [SQLModel guide](apps/sqlalchemy-example/docs/WHY_SQLMODEL.md) for details.
 
-- PostgreSQL with ORM models (TypeORM/SQLAlchemy)
-- CDC streaming changes in real-time
-- ClickHouse tables automatically updated
-- REST API with interactive documentation
+### Test the Pipeline
 
-## 📖 Documentation
+```bash
+cd apps/test-client
+pnpm install && pnpm dev
+```
+
+Visit http://localhost:3001 to create data and watch CDC in action.
+
+## Documentation
 
 ### Getting Started
+- [Quick Start Guide](QUICKSTART.md) - Get running in 5 minutes
+- [TypeORM Example](apps/typeorm-example/README.md) - TypeScript implementation
+- [SQLModel Example](apps/sqlalchemy-example/README.md) - Python implementation with SQLModel
+- [Test Client](apps/test-client/README.md) - Interactive UI for testing
 
-**TypeScript/TypeORM:**
-- **[TypeORM Example README](apps/typeorm-example/README.md)** - Complete setup guide
-- **[Quick Start Guide](apps/typeorm-example/docs/MOOSE_CDC_QUICKSTART.md)** - 5-minute setup
-- **[License Setup](apps/typeorm-example/LICENSE_SETUP.md)** - Get your Redpanda license
+### Architecture & Design
+- [CDC Pipeline Design](apps/typeorm-example/docs/CDC_PIPELINE_DESIGN.md) - How CDC works
+- [OLAP Conversion Guide](apps/typeorm-example/docs/OLAP_CONVERSION_GUIDE.md) - ORM to analytics patterns
+- [TypeORM Setup Guide](apps/typeorm-example/docs/SETUP_GUIDE.md) - Detailed setup with troubleshooting
 
-**Python/SQLAlchemy:**
-- **[SQLAlchemy Example README](apps/sqlalchemy-example/README.md)** - Complete setup guide
-- **[SQLAlchemy to OLAP Guide](apps/sqlalchemy-example/docs/SQLALCHEMY_TO_OLAP_GUIDE.md)** - Conversion patterns
-- **[Setup Summary](apps/sqlalchemy-example/SETUP_SUMMARY.md)** - What was created
-
-### Detailed Guides (TypeORM)
-
-- **[Complete Setup Guide](apps/typeorm-example/docs/SETUP_GUIDE.md)** - Step-by-step with troubleshooting
-- **[CDC Pipeline Design](apps/typeorm-example/docs/CDC_PIPELINE_DESIGN.md)** - Architecture deep dive
-- **[OLAP Conversion Guide](apps/typeorm-example/docs/OLAP_CONVERSION_GUIDE.md)** - TypeORM → Moose patterns
-- **[Documentation Index](apps/typeorm-example/docs/README.md)** - Complete docs
-
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 oltp-to-olap-showcase/
 ├── apps/
-│   ├── typeorm-example/      ✅ TypeScript/Node.js CDC demo
-│   │   ├── src/              # TypeORM OLTP entities & API
-│   │   ├── app/              # Moose OLAP table definitions
-│   │   ├── docs/             # Complete documentation
-│   │   ├── *.sh              # Setup scripts
-│   │   └── *.yaml            # Docker compose configs
+│   ├── typeorm-example/       # TypeScript/Node.js implementation
+│   │   ├── src/               # TypeORM entities & Express API
+│   │   ├── app/               # Moose OLAP tables
+│   │   └── docs/              # Architecture guides
 │   │
-│   ├── sqlalchemy-example/   ✅ Python CDC demo
-│   │   ├── src/              # SQLAlchemy OLTP models & API
-│   │   ├── app/              # Moose OLAP table definitions
-│   │   ├── docs/             # Conversion guide
-│   │   └── *.yaml            # Docker compose configs
+│   ├── sqlalchemy-example/    # Python/FastAPI implementation (uses SQLModel)
+│   │   ├── src/               # SQLModel models & FastAPI
+│   │   └── app/               # Moose OLAP tables
 │   │
-│   └── test-client/          ✅ React UI for testing
-│       └── src/              # Test client app
+│   ├── test-client/           # React test UI
+│   │
+│   ├── drizzle-example/       # WIP - Not functional
+│   ├── prisma-example/        # WIP - Not functional
+│   └── sequelize-example/     # WIP - Not functional
 │
-├── packages/                 (shared utilities)
-└── README.md                 👈 You are here
+├── QUICKSTART.md
+└── README.md
 ```
 
-## 🎓 How It Works
+## How It Works
 
-### 1. OLTP Models
+### 1. OLTP Models (Normalized)
 
-**TypeORM (TypeScript):**
+Your application uses standard ORM models with relationships:
+
+**TypeORM:**
 ```typescript
-// src/entities/Order.ts
 @Entity()
 export class Order {
   @PrimaryGeneratedColumn()
@@ -163,177 +158,154 @@ export class Order {
   @ManyToOne(() => Customer)
   customer: Customer;
 
-  @OneToMany(() => OrderItem, (item) => item.order)
+  @OneToMany(() => OrderItem, item => item.order)
   items: OrderItem[];
 }
 ```
 
-**SQLAlchemy (Python):**
+**SQLModel (Python):**
 ```python
-# src/models/order.py
-class Order(Base):
-    __tablename__ = "orders"
+from sqlmodel import SQLModel, Field, Relationship
 
-    id = Column(Integer, primary_key=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"))
-
-    customer = relationship("Customer", back_populates="orders")
-    items = relationship("OrderItem", back_populates="order")
+class Order(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    customer_id: int = Field(foreign_key="customer.id")
+    customer: Customer | None = Relationship(back_populates="orders")
+    # Same class works for DB table AND API validation
 ```
 
-### 2. CDC Stream (PostgreSQL WAL)
+### 2. CDC Capture
 
-PostgreSQL logical replication captures every INSERT, UPDATE, DELETE:
+PostgreSQL's Write-Ahead Log (WAL) captures every change:
 
 ```json
 {
-  "table": "orders",
+  "table": "order",
   "operation": "insert",
-  "before": null,
-  "after": {
-    "id": 1,
-    "customer_id": 123,
-    "status": "pending",
-    "total": 99.99
-  }
+  "after": {"id": 1, "customer_id": 123, "status": "pending", "total": 99.99}
 }
 ```
 
-### 3. OLAP Tables (Moose)
+Redpanda Connect streams these events to Kafka topics in real-time.
 
-Denormalized for analytics - no JOINs needed:
+### 3. Transform & Load
+
+Moose functions transform normalized data into denormalized analytics tables:
 
 ```typescript
-// app/index.ts
+// Denormalize: join customer data into orders
 export interface OrderFact {
   order_id: UInt64;
-  customer_id: UInt64;
-  customer_name: string; // Denormalized!
-  customer_email: string; // Denormalized!
+  customer_name: string;    // From customers table
+  customer_email: string;   // From customers table
   status: string;
   total: Float64;
-  order_date: DateTime;
 }
-
-export const OrderFact = new OlapTable<OrderFact>('order_fact', {
-  orderByFields: ['order_date', 'order_id'],
-});
 ```
 
-### 4. Fast Analytics (ClickHouse)
+### 4. Fast Analytics
+
+Query ClickHouse without expensive JOINs:
 
 ```sql
--- No JOINs! Everything pre-joined
-SELECT
-  customer_name,
-  COUNT(*) as order_count,
-  SUM(total) as total_revenue
+SELECT customer_name, SUM(total) as revenue
 FROM order_fact
-WHERE order_date >= today() - INTERVAL 30 DAY
+WHERE order_date >= today() - 30
 GROUP BY customer_name
-ORDER BY total_revenue DESC;
+ORDER BY revenue DESC;
 ```
 
-## 🔄 Data Flow
+## Use Cases
 
-```
-┌─────────────┐   CDC Events   ┌──────────────┐   Kafka Topic   ┌─────────────┐
-│ PostgreSQL  │──────WAL──────>│   Redpanda   │────────────────>│  Moose      │
-│  (TypeORM)  │                │   Connect    │                 │  Functions  │
-└─────────────┘                └──────────────┘                 └─────┬───────┘
-                                                                      │
-                                                                      │ Transform
-                                                                      ▼
-                                                               ┌────────────┐
-                                                               │ ClickHouse │
-                                                               │   (OLAP)   │
-                                                               └────────────┘
-```
+**When to use OLTP-to-OLAP CDC:**
 
-Every database change is:
+- Analytical queries slowing down your transactional database
+- Building real-time dashboards and reports
+- Need to separate operational and analytical workloads
+- Want fast aggregations without complex JOINs
+- Require historical data analysis alongside live transactions
 
-1. **Captured** by PostgreSQL WAL
-2. **Streamed** via Redpanda Connect
-3. **Transformed** by Moose flows
-4. **Stored** in ClickHouse
+**Example scenarios:**
+- Revenue and sales analytics
+- Customer behavior analysis
+- Product performance metrics
+- Real-time operational monitoring
+- Audit trails and compliance reporting
 
-## 🎯 Use Cases
+## Technology Stack
 
-**When to use this pattern:**
-
-✅ Slow analytical queries on your OLTP database
-✅ Need real-time analytics without impacting transactions
-✅ Want to separate operational and analytical workloads
-✅ Need to denormalize data for fast queries
-✅ Building dashboards or reports
-
-**Real-world scenarios:**
-
-- Customer analytics dashboards
-- Order/revenue metrics
-- Product performance reports
-- Real-time monitoring
-- Audit trails
-
-## 🛠️ Technology Stack
-
-**Common Infrastructure:**
-- **CDC:** Redpanda Connect (PostgreSQL CDC connector)
-- **Streaming:** Redpanda (Kafka API)
-- **OLAP:** Moose + ClickHouse
-- **Test Client:** React + Vite + shadcn/ui
+**Shared Infrastructure:**
+- PostgreSQL 15 with logical replication
+- Redpanda Connect (CDC connector)
+- Redpanda (Kafka-compatible streaming)
+- Moose (stream processing)
+- ClickHouse (columnar analytics database)
 
 **TypeORM Example:**
-- **OLTP:** PostgreSQL + TypeORM
-- **API:** Express + Scalar (OpenAPI docs)
-- **Language:** TypeScript
+- TypeScript + Node.js
+- TypeORM 0.3
+- Express + Scalar OpenAPI docs
 
-**SQLAlchemy Example:**
-- **OLTP:** PostgreSQL + SQLAlchemy 2.0
-- **API:** FastAPI + Uvicorn + Pydantic
-- **Language:** Python 3.10+
+**SQLModel Example:**
+- Python 3.10+
+- **SQLModel** (combines SQLAlchemy 2.0 + Pydantic v2)
+- FastAPI (by same creator as SQLModel)
+- Single model = database table + API validation
 
-## 📚 Key Concepts
+**Test Client:**
+- React 18 + Vite
+- shadcn/ui components
+- Tailwind CSS
 
-### Change Data Capture (CDC)
+## Key Concepts
 
-Captures every database change at the transaction log level (PostgreSQL WAL). No polling, no triggers - just pure log-based replication.
+**Change Data Capture (CDC)**
+Captures database changes from PostgreSQL's Write-Ahead Log. No polling, no triggers - log-based replication with minimal overhead.
 
-### Denormalization
+**Denormalization**
+Pre-joining related data for fast analytics. Instead of JOINing orders with customers at query time, customer data is embedded in the order fact table.
 
-Pre-joining related data to avoid expensive JOINs in analytics. Orders include customer names inline instead of requiring joins.
+**Star Schema**
+Fact tables (orders, order items) and dimension tables (customers, products) optimized for analytical queries and aggregations.
 
-### Star Schema
+**Real-time Processing**
+Changes appear in ClickHouse within milliseconds, enabling live dashboards and up-to-the-second reporting.
 
-Dimensional modeling with fact tables (orders) and dimension tables (customers, products). Optimized for analytical queries.
+## Contributing
 
-### Real-time Sync
+Contributions are welcome! This is a demonstration project showing CDC patterns with different ORMs.
 
-Changes appear in ClickHouse within seconds, not hours. Perfect for live dashboards and real-time reporting.
+**Areas for contribution:**
+- Bug fixes and improvements
+- Documentation enhancements
+- New ORM examples (help finish Drizzle, Prisma, or Sequelize)
+- Performance optimizations
+- Additional test scenarios
 
-## 🤝 Contributing
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+## Learn More
 
-## 📄 License
+**Core Technologies:**
+- [Moose Documentation](https://docs.fiveonefour.com/moose/)
+- [Redpanda Connect](https://docs.redpanda.com/redpanda-connect/)
+- [ClickHouse Documentation](https://clickhouse.com/docs/)
+- [PostgreSQL Logical Replication](https://www.postgresql.org/docs/current/logical-replication.html)
+
+**ORMs & Frameworks:**
+- [TypeORM](https://typeorm.io/) - TypeScript ORM
+- [SQLModel](https://sqlmodel.tiangolo.com/) - Python ORM combining SQLAlchemy + Pydantic
+- [SQLAlchemy 2.0](https://docs.sqlalchemy.org/) - Python SQL toolkit (SQLModel foundation)
+- [FastAPI](https://fastapi.tiangolo.com/) - Modern Python API framework
+- [Express](https://expressjs.com/) - Node.js web framework
+
+## License
 
 MIT
 
-## 🔗 Learn More
-
-**Framework Documentation:**
-- [Moose Documentation](https://docs.fiveonefour.com/moose/)
-- [Redpanda Connect](https://docs.redpanda.com/redpanda-connect/)
-- [ClickHouse Docs](https://clickhouse.com/docs/)
-
-**ORM & API Frameworks:**
-- [TypeORM](https://typeorm.io/)
-- [SQLAlchemy](https://docs.sqlalchemy.org/)
-- [FastAPI](https://fastapi.tiangolo.com/)
-- [Express](https://expressjs.com/)
-
 ---
 
-**Ready to get started?** Choose your stack:
-- 🟦 [TypeScript/TypeORM Example](apps/typeorm-example/README.md)
-- 🐍 [Python/SQLAlchemy Example](apps/sqlalchemy-example/README.md)
+**Ready to get started?**
+1. [Quick Start Guide](QUICKSTART.md) - 5-minute setup
+2. Choose your stack: [TypeORM](apps/typeorm-example/README.md) or [SQLModel](apps/sqlalchemy-example/README.md)
+3. Run the [Test Client](apps/test-client/README.md) to see CDC in action

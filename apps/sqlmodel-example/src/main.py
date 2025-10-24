@@ -13,6 +13,7 @@ from sqlmodel import Session, select
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from pydantic import BaseModel
 from typing import Generic, TypeVar, Optional
+from datetime import datetime
 import logging
 import os
 from .db.models import Customer, CustomerInsert 
@@ -39,6 +40,18 @@ def create_success_response(data: T, message: Optional[str] = None) -> ApiRespon
 def create_error_response(error: str, message: Optional[str] = None) -> ApiResponse[None]:
     """Create an error API response"""
     return ApiResponse(success=False, error=error, message=message)
+
+
+# ==================== Custom Response Models ====================
+
+class OrderWithItems(BaseModel):
+    """Order response model that explicitly includes items"""
+    id: Optional[int] = None
+    customerId: int
+    orderDate: Optional[datetime] = None
+    total: float
+    status: str
+    items: list[OrderItem] = []
 
 
 # Configure logging
@@ -300,43 +313,54 @@ def update_product(productId: int, product: ProductInsert, db: Session = Depends
 
 # ==================== Order Endpoints ====================
 
-@app.get("/api/orders", response_model=ApiResponse[list[Order]])
+@app.get("/api/orders", response_model=ApiResponse[list[OrderWithItems]])
 def get_orders(db: Session = Depends(get_db)):
     with db:
         orders = db.exec(select(Order)).all()
-        return create_success_response(orders, f"Retrieved {len(orders)} orders")
+        
+        # Convert orders to OrderWithItems and load items
+        orders_with_items = []
+        for order in orders:
+            order_with_items = OrderWithItems(
+                id=order.id,
+                customerId=order.customerId,
+                orderDate=order.orderDate,
+                total=order.total,
+                status=order.status,
+                items=order.items
+            )
+            orders_with_items.append(order_with_items)
+        
+        return create_success_response(orders_with_items, f"Retrieved {len(orders)} orders")
 
 
-@app.get("/api/orders/{orderId}", response_model=ApiResponse[Order])
+@app.get("/api/orders/{orderId}", response_model=ApiResponse[OrderWithItems])
 def get_order(orderId: int, db: Session = Depends(get_db)):
     with db:
         order = db.get(Order, orderId)
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
-        return create_success_response(order, f"Order {orderId} retrieved successfully")
+        
+        # Load items and convert to OrderWithItems
+        order_items = list(db.exec(select(OrderItem).where(OrderItem.orderId == order.id)).all())
+        
+        order_with_items = OrderWithItems(
+            id=order.id,
+            customerId=order.customerId,
+            orderDate=order.orderDate,
+            total=order.total,
+            status=order.status,
+            items=order_items
+        )
+        
+        return create_success_response(order_with_items, f"Order {orderId} retrieved successfully")
 
 
 @app.post("/api/orders", status_code=status.HTTP_201_CREATED, response_model=ApiResponse[Order])
 def create_order(order: OrderInsert, db: Session = Depends(get_db)):
-    import time
-    start_time = time.time()
-    
-    # Log incoming request details
-    logger.info("=" * 60)
-    logger.info("🛒 CREATE ORDER REQUEST STARTED")
-    logger.info(f"📋 Request Data: {order.model_dump()}")
-    logger.info(f"👤 Customer ID: {order.customerId}")
-    logger.info(f"💰 Total Amount: {order.total}")
-    logger.info(f"📅 Order Date: {order.orderDate}")
-    logger.info("=" * 60)
-    
     try:
-        # Step 1: Validate customer exists
-        logger.info(f"🔍 Step 1: Validating customer exists (ID: {order.customerId})")
         customer = db.get(Customer, order.customerId)
         if not customer:
-            logger.error(f"❌ Customer validation failed: Customer {order.customerId} not found")
-            logger.error(f"🔍 Available customers: {[c.id for c in db.exec(select(Customer)).all()]}")
             raise HTTPException(
                 status_code=400, 
                 detail={
@@ -346,13 +370,7 @@ def create_order(order: OrderInsert, db: Session = Depends(get_db)):
                 }
             )
         
-        logger.info(f"✅ Customer validation passed: {customer.name} ({customer.email})")
-        
-        # Step 2: Create order object
-        logger.info("🔧 Step 2: Creating order object from request data")
         order_data = order.model_dump()
-        logger.info(f"📊 Order data to be inserted: {order_data}")
-        
         db_order = Order(**order_data)
         
         db.add(db_order)
@@ -360,15 +378,16 @@ def create_order(order: OrderInsert, db: Session = Depends(get_db)):
         db.refresh(db_order)
         
         order_id = db_order.id
-        elapsed_time = time.time() - start_time    
+        
+        # Load the items for the newly created order to ensure they're included in JSON response
+        db_order.items = list(db.exec(select(OrderItem).where(OrderItem.orderId == order_id)).all())
+        
         return create_success_response(db_order, f"Order {order_id} created successfully for {customer.name}")
     
     except HTTPException as he:
-        elapsed_time = time.time() - start_time
         raise
         
     except IntegrityError as ie:
-        elapsed_time = time.time() - start_time
         db.rollback()
         raise HTTPException(
             status_code=409,
@@ -377,12 +396,10 @@ def create_order(order: OrderInsert, db: Session = Depends(get_db)):
                 "error": "Database Integrity Error",
                 "message": "Order creation failed due to database constraints",
                 "details": str(ie.orig) if hasattr(ie, 'orig') else str(ie),
-                "processingTime": f"{elapsed_time:.3f}s"
             }
         )
         
     except SQLAlchemyError as sae:
-        elapsed_time = time.time() - start_time
         db.rollback()
         raise HTTPException(
             status_code=500,
@@ -391,12 +408,10 @@ def create_order(order: OrderInsert, db: Session = Depends(get_db)):
                 "error": "Database Error",
                 "message": "Order creation failed due to database error",
                 "details": str(sae),
-                "processingTime": f"{elapsed_time:.3f}s"
             }
         )
         
     except Exception as e:
-        elapsed_time = time.time() - start_time
         db.rollback()
         raise HTTPException(
             status_code=500,
@@ -405,7 +420,6 @@ def create_order(order: OrderInsert, db: Session = Depends(get_db)):
                 "error": "Internal Server Error",
                 "message": "Order creation failed due to unexpected error",
                 "details": str(e),
-                "processingTime": f"{elapsed_time:.3f}s"
             }
         )
 

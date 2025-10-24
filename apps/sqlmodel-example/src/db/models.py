@@ -37,7 +37,7 @@ class CustomerInsert(CustomerBase):
 class ProductBase(SQLModel):
     name: str = Field(min_length=1, max_length=255, nullable=False)
     category: str = Field(min_length=1, max_length=100, nullable=False, index=True)
-    price: Decimal = Field(gt=0, decimal_places=2, nullable=False)
+    price: float = Field(gt=0, nullable=False)
 
 class Product(ProductBase, table=True):
     """Product entity representing items available for purchase."""
@@ -92,7 +92,7 @@ class OrderItemBase(SQLModel):
     orderId: int = Field(default=None, foreign_key="order.id", index=True)
     productId: int = Field(default=None, foreign_key="product.id", index=True)
     quantity: int = Field(gt=0, nullable=False)
-    price: Decimal = Field(gt=0, decimal_places=2, nullable=False)
+    price: float = Field(gt=0, nullable=False)
 
 class OrderItem(OrderItemBase, table=True):
     """OrderItem entity representing individual line items in an order."""
