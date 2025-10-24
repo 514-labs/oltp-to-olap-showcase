@@ -4,16 +4,16 @@
 input:
   postgres_cdc:
     dsn: ${POSTGRES_CDC_DSN}
-    schema: ${POSTGRES_CDC_SCHEMA:public}
-    slot_name: ${POSTGRES_CDC_SLOT:redpanda_cdc_slot}
-    publication_name: ${POSTGRES_CDC_PUBLICATION:redpanda_cdc_publication}
-    tables: ${POSTGRES_CDC_TABLES_JSON:["customers","products","orders","order_items"]}
+    schema: ${POSTGRES_CDC_SCHEMA:-public}
+    slot_name: ${POSTGRES_CDC_SLOT:-redpanda_cdc_slot}
+    publication_name: ${POSTGRES_CDC_PUBLICATION:-redpanda_cdc_publication}
+    tables: ${POSTGRES_CDC_TABLES_JSON}
 
 pipeline:
   processors:
     - mapping: |
         root = this
-        root._metadata = {
+        root.metadata = {
           "table": meta("table"),
           "operation": meta("operation"),
           "lsn": meta("lsn")
@@ -23,9 +23,9 @@ pipeline:
 output:
   kafka:
     addresses:
-      - ${POSTGRES_CDC_BROKER_ADDRESS:redpanda:9092}
-    topic: ${POSTGRES_CDC_TOPIC:cdc_events}
+      - ${POSTGRES_CDC_BROKER_ADDRESS:-redpanda:9092}
+    topic: ${POSTGRES_CDC_TOPIC:-cdc_events}
     max_in_flight: 1
 
 http:
-  address: ${POSTGRES_CDC_HTTP_ADDR:0.0.0.0:4195}
+  address: ${POSTGRES_CDC_HTTP_ADDR:-0.0.0.0:4195}

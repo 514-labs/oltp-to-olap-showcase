@@ -41,7 +41,7 @@ services:
       POSTGRES_CDC_SCHEMA: ${POSTGRES_CDC_SCHEMA:-public}
       POSTGRES_CDC_SLOT: ${POSTGRES_CDC_SLOT:-redpanda_cdc_slot}
       POSTGRES_CDC_PUBLICATION: ${POSTGRES_CDC_PUBLICATION:-redpanda_cdc_publication}
-      POSTGRES_CDC_TABLES_JSON: ${POSTGRES_CDC_TABLES_JSON:["customers","products","orders","order_items"]}
+      POSTGRES_CDC_TABLES_JSON: '${POSTGRES_CDC_TABLES_JSON:-["customers","products","orders","order_items"]}'
       POSTGRES_CDC_TOPIC: ${POSTGRES_CDC_TOPIC:-typeorm_cdc_events}
       POSTGRES_CDC_BROKER_ADDRESS: ${POSTGRES_CDC_BROKER_ADDRESS:-redpanda:9092}
       POSTGRES_CDC_HTTP_ADDR: ${POSTGRES_CDC_HTTP_ADDR:-0.0.0.0:4195}
