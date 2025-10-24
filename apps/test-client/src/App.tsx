@@ -3,7 +3,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Toaster } from '@/components/ui/toaster';
 import { customersApi, productsApi, ordersApi, orderItemsApi } from '@/lib/api';
@@ -30,9 +36,9 @@ function App() {
         productsApi.getAll(),
         ordersApi.getAll(),
       ]);
-      setCustomers(customersRes.data);
-      setProducts(productsRes.data);
-      setOrders(ordersRes.data);
+      setCustomers(customersRes.data || []);
+      setProducts(productsRes.data || []);
+      setOrders(ordersRes.data || []);
     } catch (error) {
       toast({
         title: 'Error loading data',
@@ -44,7 +50,16 @@ function App() {
 
   const generateRandomCustomer = async () => {
     const firstNames = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry'];
-    const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis'];
+    const lastNames = [
+      'Smith',
+      'Johnson',
+      'Williams',
+      'Brown',
+      'Jones',
+      'Garcia',
+      'Miller',
+      'Davis',
+    ];
     const countries = ['USA', 'Canada', 'UK', 'Germany', 'France', 'Spain', 'Italy', 'Japan'];
     const cities = ['New York', 'Toronto', 'London', 'Berlin', 'Paris', 'Madrid', 'Rome', 'Tokyo'];
 
@@ -79,8 +94,26 @@ function App() {
   };
 
   const generateRandomProduct = async () => {
-    const products = ['Laptop', 'Mouse', 'Keyboard', 'Monitor', 'Headphones', 'Webcam', 'Desk', 'Chair'];
-    const categories = ['Electronics', 'Electronics', 'Electronics', 'Electronics', 'Electronics', 'Electronics', 'Furniture', 'Furniture'];
+    const products = [
+      'Laptop',
+      'Mouse',
+      'Keyboard',
+      'Monitor',
+      'Headphones',
+      'Webcam',
+      'Desk',
+      'Chair',
+    ];
+    const categories = [
+      'Electronics',
+      'Electronics',
+      'Electronics',
+      'Electronics',
+      'Electronics',
+      'Electronics',
+      'Furniture',
+      'Furniture',
+    ];
 
     const idx = Math.floor(Math.random() * products.length);
     const name = products[idx];
@@ -139,7 +172,10 @@ function App() {
       }
 
       // Calculate total
-      const total = selectedProducts.reduce((sum, p) => sum + p.price * (Math.floor(Math.random() * 3) + 1), 0);
+      const total = selectedProducts.reduce(
+        (sum, p) => sum + p.price * (Math.floor(Math.random() * 3) + 1),
+        0
+      );
 
       // Create order
       const statuses = ['pending', 'processing', 'completed', 'cancelled'];
@@ -168,6 +204,7 @@ function App() {
         description: `Order #${orderRes.data.id} created for ${customer.name}`,
       });
     } catch (error) {
+      console.log(error);
       toast({
         title: 'Error creating order',
         description: error instanceof Error ? error.message : 'Unknown error',
@@ -203,7 +240,9 @@ function App() {
       <div className="max-w-7xl mx-auto space-y-8">
         <div className="space-y-2">
           <h1 className="text-4xl font-bold">OLTP Test Client</h1>
-          <p className="text-gray-600">Test CDC pipeline by creating, modifying, and deleting orders</p>
+          <p className="text-gray-600">
+            Test CDC pipeline by creating, modifying, and deleting orders
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -213,17 +252,11 @@ function App() {
               <CardDescription>Generate random customers</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Button
-                onClick={generateRandomCustomer}
-                disabled={loading}
-                className="w-full"
-              >
+              <Button onClick={generateRandomCustomer} disabled={loading} className="w-full">
                 <Plus className="mr-2 h-4 w-4" />
                 Generate Random Customer
               </Button>
-              <div className="text-sm text-gray-600">
-                Total: {customers.length} customers
-              </div>
+              <div className="text-sm text-gray-600">Total: {customers.length} customers</div>
             </CardContent>
           </Card>
 
@@ -233,17 +266,11 @@ function App() {
               <CardDescription>Generate random products</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Button
-                onClick={generateRandomProduct}
-                disabled={loading}
-                className="w-full"
-              >
+              <Button onClick={generateRandomProduct} disabled={loading} className="w-full">
                 <Plus className="mr-2 h-4 w-4" />
                 Generate Random Product
               </Button>
-              <div className="text-sm text-gray-600">
-                Total: {products.length} products
-              </div>
+              <div className="text-sm text-gray-600">Total: {products.length} products</div>
             </CardContent>
           </Card>
 
@@ -261,9 +288,7 @@ function App() {
                 <Plus className="mr-2 h-4 w-4" />
                 Generate Random Order
               </Button>
-              <div className="text-sm text-gray-600">
-                Total: {orders.length} orders
-              </div>
+              <div className="text-sm text-gray-600">Total: {orders.length} orders</div>
             </CardContent>
           </Card>
         </div>
@@ -308,7 +333,9 @@ function App() {
           <CardContent>
             <div className="space-y-4">
               {orders.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">No orders yet. Create some orders to get started!</p>
+                <p className="text-gray-500 text-center py-8">
+                  No orders yet. Create some orders to get started!
+                </p>
               ) : (
                 orders.map((order) => (
                   <div key={order.id} className="border rounded-lg p-4 space-y-3">
@@ -319,15 +346,12 @@ function App() {
                           Customer ID: {order.customerId} | Status: {order.status}
                         </p>
                         <p className="text-sm text-gray-600">
-                          Total: ${order.total.toFixed(2)} | Date: {new Date(order.orderDate).toLocaleDateString()}
+                          Total: ${Number(order.total).toFixed(2)} | Date:{' '}
+                          {new Date(order.orderDate).toLocaleDateString()}
                         </p>
                       </div>
                       <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setEditingOrder(order)}
-                        >
+                        <Button variant="outline" size="sm" onClick={() => setEditingOrder(order)}>
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button
@@ -347,7 +371,8 @@ function App() {
                         <div className="space-y-1">
                           {order.items.map((item) => (
                             <p key={item.id} className="text-sm text-gray-600 pl-4">
-                              Product #{item.productId} - Qty: {item.quantity} @ ${item.price.toFixed(2)}
+                              Product #{item.productId} - Qty: {item.quantity} @ $
+                              {item.price.toFixed(2)}
                             </p>
                           ))}
                         </div>

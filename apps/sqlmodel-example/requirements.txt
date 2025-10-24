@@ -1,0 +1,20 @@
+# Core API dependencies
+fastapi[standard]>=0.115.0  # Includes uvicorn and FastAPI CLI
+pydantic>=2.5.0
+pydantic[email]>=2.5.0
+python-dotenv>=1.0.0  # Load .env files
+
+# Database
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9
+sqlmodel>=0.0.16
+# alembic>=1.13.0  # Uncomment for production migrations
+
+# CDC Pipeline
+kafka-python-ng==2.2.2
+clickhouse-connect==0.7.16
+requests==2.32.4
+
+# Moose Framework
+moose-cli
+moose-lib

@@ -75,10 +75,12 @@ cd /Users/oliviakane/oltp-to-olap-showcase/apps/sqlalchemy-example
 moose dev
 
 # Terminal 3: Start FastAPI
-python -m uvicorn src.main:app --reload --port 3002
+fastapi dev src/main.py
 ```
 
 Verify the API is accessible at http://localhost:3002
+
+**Note**: The SQLAlchemy backend uses camelCase aliases for API compatibility, so it works seamlessly with this test client.
 
 ## Installation and Setup
 
@@ -114,12 +116,14 @@ Each button click sends a POST request to your OLTP API. PostgreSQL writes the r
 Once you have customers and products, click "Generate Random Order" to create test orders.
 
 **What Gets Created:**
+
 - A new order associated with a random customer
 - 1-5 order items, each with a random product and quantity
 - Calculated totals based on product prices
 
 **Watch the Pipeline:**
 This single button triggers multiple database inserts:
+
 1. One INSERT into the `orders` table
 2. Multiple INSERTs into the `order_items` table
 3. CDC events for each insert
@@ -131,11 +135,13 @@ All of this happens in under a second.
 ### 3. Edit Orders
 
 Click the edit (pencil) icon on any order to modify:
+
 - Customer assignment
 - Order status (pending, confirmed, shipped, delivered, cancelled)
 - Total amount
 
 **What This Tests:**
+
 - UPDATE operations in the CDC pipeline
 - How Moose handles change events vs. initial inserts
 - ClickHouse's ReplacingMergeTree engine for deduplication
@@ -145,6 +151,7 @@ Click the edit (pencil) icon on any order to modify:
 Click the delete (trash) icon to remove an order.
 
 **What This Tests:**
+
 - DELETE operations in CDC
 - Soft-delete patterns (the `is_deleted` flag)
 - How analytics tables handle removed records
@@ -271,7 +278,7 @@ export default async function processOrder(event: OrderCDCEvent) {
     total: event.after.total,
     order_date: new Date(event.after.created_at),
     is_deleted: event.operation === 'delete' ? 1 : 0,
-    lsn: parseInt(event._metadata.lsn, 16)
+    lsn: parseInt(event._metadata.lsn, 16),
   };
 }
 ```
@@ -285,6 +292,7 @@ This is the bridge between your transactional data model and your analytics sche
 **Symptom**: Buttons don't work, console shows network errors.
 
 **Solution**:
+
 - Verify the OLTP API is running (check http://localhost:3000 or http://localhost:3002)
 - Check that PostgreSQL is running: `docker ps | grep postgres`
 - Review API logs for errors
@@ -294,6 +302,7 @@ This is the bridge between your transactional data model and your analytics sche
 **Symptom**: API requests succeed, but ClickHouse queries return no data.
 
 **Solution**:
+
 - Check Moose is running: look for the Moose dev server output
 - Verify CDC connector is active: check Redpanda Connect logs
 - Check for transformation errors in Moose console
@@ -304,6 +313,7 @@ This is the bridge between your transactional data model and your analytics sche
 **Symptom**: Orders appear in the list but show 0 items.
 
 **Solution**:
+
 - Ensure products exist before creating orders
 - Check that order items table has data: query PostgreSQL directly
 - Verify the order items CDC stream is flowing
@@ -313,6 +323,7 @@ This is the bridge between your transactional data model and your analytics sche
 **Symptom**: Several seconds delay between creation and ClickHouse availability.
 
 **Solution**:
+
 - Check system resources—Docker containers may be resource-constrained
 - Review Moose transformation performance
 - Verify network latency between containers
