@@ -23,13 +23,14 @@ A complete, working example of an OLTP-to-OLAP CDC pipeline with:
 ## Project Status
 
 **Production-Ready:**
+
 - **TypeORM Example** - TypeScript/Node.js with Express API (port 3000)
 - **SQLModel Example** - Python/FastAPI implementation (port 3002)
   - Uses SQLModel (SQLAlchemy 2.0 + Pydantic) for unified database and validation models
-  - Directory named `sqlalchemy-example` for consistency, but implementation is SQLModel
 - **Test Client** - React UI for testing both backends
 
 **Work in Progress:**
+
 - **Drizzle Example** - WIP, not yet functional
 - **Prisma Example** - WIP, not yet functional
 
@@ -59,6 +60,7 @@ A complete, working example of an OLTP-to-OLAP CDC pipeline with:
 | **SQLModel Example** | Python on FastAPI | To explore SQLModel's unified ORM + validation models | 3 terminals (PostgreSQL, Moose, FastAPI) |
 
 **Prerequisites:**
+
 - Docker and Docker Compose
 - Node.js 18+ (for TypeORM) or Python 3.10+ (for SQLModel)
 - Redpanda Enterprise License - [Get a free 30-day trial](https://redpanda.com/try-enterprise)
@@ -128,12 +130,14 @@ Once data is flowing, confirm the end-to-end pipeline with:
 ## Documentation
 
 ### Getting Started
+
 - [Quick Start Guide](QUICKSTART.md) - Get running in 5 minutes
 - [TypeORM Example](apps/typeorm-example/README.md) - TypeScript implementation
 - [SQLModel Example](apps/sqlalchemy-example/README.md) - Python implementation with SQLModel
 - [Test Client](apps/test-client/README.md) - Interactive UI for testing
 
 ### Architecture & Design
+
 - [CDC Pipeline Design](apps/typeorm-example/docs/CDC_PIPELINE_DESIGN.md) - How CDC works
 - [OLAP Conversion Guide](apps/typeorm-example/docs/OLAP_CONVERSION_GUIDE.md) - ORM to analytics patterns
 - [TypeORM Setup Guide](apps/typeorm-example/docs/SETUP_GUIDE.md) - Detailed setup with troubleshooting
@@ -174,6 +178,7 @@ The `packages/shared` workspace houses Express middleware, route helpers, and Cl
 Your application uses standard ORM models with relationships:
 
 **TypeORM:**
+
 ```typescript
 @Entity()
 export class Order {
@@ -183,12 +188,13 @@ export class Order {
   @ManyToOne(() => Customer)
   customer: Customer;
 
-  @OneToMany(() => OrderItem, item => item.order)
+  @OneToMany(() => OrderItem, (item) => item.order)
   items: OrderItem[];
 }
 ```
 
 **SQLModel (Python):**
+
 ```python
 from sqlmodel import SQLModel, Field, Relationship
 
@@ -207,7 +213,7 @@ PostgreSQL's Write-Ahead Log (WAL) captures every change:
 {
   "table": "order",
   "operation": "insert",
-  "after": {"id": 1, "customer_id": 123, "status": "pending", "total": 99.99}
+  "after": { "id": 1, "customer_id": 123, "status": "pending", "total": 99.99 }
 }
 ```
 
@@ -221,8 +227,8 @@ Moose functions transform normalized data into denormalized analytics tables:
 // Denormalize: join customer data into orders
 export interface OrderFact {
   order_id: UInt64;
-  customer_name: string;    // From customers table
-  customer_email: string;   // From customers table
+  customer_name: string; // From customers table
+  customer_email: string; // From customers table
   status: string;
   total: Float64;
 }
@@ -251,6 +257,7 @@ ORDER BY revenue DESC;
 - Require historical data analysis alongside live transactions
 
 **Example scenarios:**
+
 - Revenue and sales analytics
 - Customer behavior analysis
 - Product performance metrics
@@ -260,6 +267,7 @@ ORDER BY revenue DESC;
 ## Technology Stack
 
 **Shared Infrastructure:**
+
 - PostgreSQL 15 with logical replication
 - Redpanda Connect (CDC connector)
 - Redpanda (Kafka-compatible streaming)
@@ -267,17 +275,20 @@ ORDER BY revenue DESC;
 - ClickHouse (columnar analytics database)
 
 **TypeORM Example:**
+
 - TypeScript + Node.js
 - TypeORM 0.3
 - Express + Scalar OpenAPI docs
 
 **SQLModel Example:**
+
 - Python 3.10+
 - **SQLModel** (combines SQLAlchemy 2.0 + Pydantic v2)
 - FastAPI (by same creator as SQLModel)
 - Single model = database table + API validation
 
 **Test Client:**
+
 - React 18 + Vite
 - shadcn/ui components
 - Tailwind CSS
@@ -301,6 +312,7 @@ Changes appear in ClickHouse within milliseconds, enabling live dashboards and u
 Contributions are welcome! This is a demonstration project showing CDC patterns with different ORMs.
 
 **Areas for contribution:**
+
 - Bug fixes and improvements
 - Documentation enhancements
 - New ORM examples (help finish Drizzle, Prisma, or Sequelize)
@@ -312,12 +324,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 ## Learn More
 
 **Core Technologies:**
+
 - [Moose Documentation](https://docs.fiveonefour.com/moose/)
 - [Redpanda Connect](https://docs.redpanda.com/redpanda-connect/)
 - [ClickHouse Documentation](https://clickhouse.com/docs/)
 - [PostgreSQL Logical Replication](https://www.postgresql.org/docs/current/logical-replication.html)
 
 **ORMs & Frameworks:**
+
 - [TypeORM](https://typeorm.io/) - TypeScript ORM
 - [SQLModel](https://sqlmodel.tiangolo.com/) - Python ORM combining SQLAlchemy + Pydantic
 - [SQLAlchemy 2.0](https://docs.sqlalchemy.org/) - Python SQL toolkit (SQLModel foundation)
@@ -331,6 +345,7 @@ MIT
 ---
 
 **Ready to get started?**
+
 1. [Quick Start Guide](QUICKSTART.md) - 5-minute setup
 2. Choose your stack: [TypeORM](apps/typeorm-example/README.md) or [SQLModel](apps/sqlalchemy-example/README.md)
 3. Run the [Test Client](apps/test-client/README.md) to see CDC in action
