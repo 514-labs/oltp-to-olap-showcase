@@ -285,7 +285,7 @@ ORDER BY revenue DESC;
 ## Key Concepts
 
 **Change Data Capture (CDC)**
-Captures database changes from PostgreSQL's Write-Ahead Log. No polling, no triggers - log-based replication with minimal overhead. See the Redpanda Connect configuration in [`apps/typeorm-example/docker/redpanda/redpanda-connect.yaml`](apps/typeorm-example/docker/redpanda/redpanda-connect.yaml).
+Captures database changes from PostgreSQL's Write-Ahead Log. No polling, no triggers - log-based replication with minimal overhead. Every demo reuses the shared template in [`packages/shared/cdc/redpanda-connect.template.yaml`](packages/shared/cdc/redpanda-connect.template.yaml) and customises it through `POSTGRES_CDC_*` environment variables.
 
 **Denormalization**
 Pre-joining related data for fast analytics. Instead of JOINing orders with customers at query time, customer data is embedded in the order fact table. Explore the Moose definition in [`apps/typeorm-example/app/order_fact.ts`](apps/typeorm-example/app/order_fact.ts) or the Python equivalent [`apps/sqlalchemy-example/app/order_fact.py`](apps/sqlalchemy-example/app/order_fact.py).

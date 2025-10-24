@@ -361,7 +361,7 @@ Not recommended for production - use migrations instead.
 
 **Issue:** CDC connector fails with SSL errors
 
-**Solution:** The CDC connector requires `?sslmode=disable` in the connection string. This is already configured in `redpanda-connect.yaml`.
+**Solution:** The CDC connector requires `?sslmode=disable` in the connection string. The default `POSTGRES_CDC_DSN` in `docker-compose.dev.override.yaml` already includes it.
 
 ### Table Name Mismatches
 
@@ -372,7 +372,7 @@ Not recommended for production - use migrations instead.
 - `order` not `orders`
 - `orderitem` not `order_items`
 
-Check `redpanda-connect.yaml` matches your actual table names.
+Ensure `POSTGRES_CDC_TABLES` / `POSTGRES_CDC_TABLES_JSON` match your actual table names.
 
 ### Data Not Appearing in ClickHouse
 

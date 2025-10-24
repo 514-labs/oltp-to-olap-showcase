@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    command:
+      - postgres
+      - -c
+      - wal_level=${POSTGRES_WAL_LEVEL:-logical}
+      - -c
+      - max_replication_slots=${POSTGRES_MAX_REPLICATION_SLOTS:-10}
+      - -c
+      - max_wal_senders=${POSTGRES_MAX_WAL_SENDERS:-10}
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-app_db}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped

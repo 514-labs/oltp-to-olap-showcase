@@ -210,32 +210,16 @@ This runs once when Moose dev environment starts.
 
 ### Redpanda Connect Configuration
 
-`redpanda-connect.yaml` configures CDC pipeline:
+The connector now uses the shared template in `packages/shared/cdc/redpanda-connect.template.yaml`. Override behaviour with the `POSTGRES_CDC_*` environment variables in `docker-compose.dev.override.yaml`.
 
 ```yaml
-input:
-  postgres_cdc:
-    dsn: 'postgres://postgres:postgres@typeorm-oltp-postgres:5432/typeorm_db'
-    slot_name: 'redpanda_cdc_slot'
-    publication_name: 'redpanda_cdc_publication'
-    tables:
-      - 'public.customers'
-      - 'public.products'
-      - 'public.orders'
-      - 'public.order_items'
-
-output:
-  kafka:
-    addresses: ['redpanda:19092']
-    topic: "typeorm.public.${! meta('table_name') }"
+environment:
+  POSTGRES_CDC_DSN: ${POSTGRES_CDC_DSN:-postgres://postgres:postgres@typeorm-oltp-postgres:5432/typeorm_db?sslmode=disable}
+  POSTGRES_CDC_TABLES_JSON: ${POSTGRES_CDC_TABLES_JSON:["customers","products","orders","order_items"]}
+  POSTGRES_CDC_TOPIC: ${POSTGRES_CDC_TOPIC:-typeorm_cdc_events}
 ```
 
-**Topics created:**
-
-- `typeorm.public.customers`
-- `typeorm.public.products`
-- `typeorm.public.orders`
-- `typeorm.public.order_items`
+The shared template copies metadata (`table`, `operation`, `lsn`) into `_metadata` and `payload` fields before publishing to Redpanda.
 
 ### Moose Flows
 
@@ -365,7 +349,7 @@ moose dev
 docker logs typeorm-redpanda-connect -f
 
 # Check configuration
-docker exec typeorm-redpanda-connect cat /redpanda-connect.yaml
+docker exec typeorm-redpanda-connect cat /connect.yaml
 
 # Restart Redpanda Connect
 docker restart typeorm-redpanda-connect

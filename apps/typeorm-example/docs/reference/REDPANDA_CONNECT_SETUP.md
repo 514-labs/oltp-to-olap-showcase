@@ -30,90 +30,50 @@ run /connect.yaml
 
 This is equivalent to `rpk connect run /connect.yaml` but the Docker image has `rpk connect` as the entrypoint.
 
-## Configuration File (`redpanda-connect.yaml`)
+## Shared Configuration Template
 
-### Input: PostgreSQL CDC
+The connector configuration now lives in `packages/shared/cdc/redpanda-connect.template.yaml` so every ORM demo can reuse the same Bloblang pipeline. Each instance customises behaviour through environment variables exposed in its `docker-compose.dev.override.yaml`.
 
 ```yaml
 input:
   postgres_cdc:
-    dsn: 'postgres://postgres:postgres@typeorm-oltp-postgres:5432/typeorm_db?sslmode=disable'
-    slot_name: 'redpanda_cdc_slot'
-    publication_name: 'redpanda_cdc_publication'
-    snapshot_mode: 'initial'
-    tables:
-      - 'public.customers'
-      - 'public.products'
-      - 'public.orders'
-      - 'public.order_items'
-```
+    dsn: ${POSTGRES_CDC_DSN}
+    schema: ${POSTGRES_CDC_SCHEMA:public}
+    slot_name: ${POSTGRES_CDC_SLOT:redpanda_cdc_slot}
+    publication_name: ${POSTGRES_CDC_PUBLICATION:redpanda_cdc_publication}
+    tables: ${POSTGRES_CDC_TABLES_JSON:["customers","products","orders","order_items"]}
 
-**Key points:**
-
-- Uses PostgreSQL logical replication (WAL)
-- Requires `wal_level=logical` in PostgreSQL config
-- Creates a replication slot for CDC
-- Takes initial snapshot, then streams changes
-
-### Pipeline: Message Processing
-
-```yaml
 pipeline:
   processors:
     - mapping: |
-        # Store original CDC envelope
         root = this
+        root._metadata = {
+          "table": meta("table"),
+          "operation": meta("operation"),
+          "lsn": meta("lsn")
+        }
+        root.payload = this
 
-        # Add metadata for routing
-        meta table_name = this.source.table
-        meta operation = this.op
-        meta timestamp = this.ts_ms
-```
-
-**Key points:**
-
-- Uses Bloblang mapping language (Redpanda Connect's native DSL)
-- Preserves full CDC envelope (before, after, source, op)
-- Extracts metadata for downstream routing
-
-### Output: Kafka (Redpanda)
-
-```yaml
 output:
   kafka:
     addresses:
-      - 'redpanda:19092'
-    topic: 'typeorm.public.${! meta("table_name") }'
-    key: '${! json("after.id").or(json("before.id")) }'
+      - ${POSTGRES_CDC_BROKER_ADDRESS:redpanda:9092}
+    topic: ${POSTGRES_CDC_TOPIC:cdc_events}
     max_in_flight: 1
-    compression: 'snappy'
+
+http:
+  address: ${POSTGRES_CDC_HTTP_ADDR:0.0.0.0:4195}
 ```
 
 **Key points:**
 
-- Routes to Moose-managed Redpanda instance
-- Dynamic topic routing based on table name
-- Uses record ID as message key for ordering
-- Single in-flight message ensures ordering
-
-### HTTP API
-
-```yaml
-http:
-  enabled: true
-  address: '0.0.0.0:4195'
-  debug_endpoints: true
-```
-
-**Available endpoints:**
-
-- `GET /ready` - Health check
-- `GET /metrics` - Prometheus metrics
-- `GET /stats` - Runtime statistics
+- `POSTGRES_CDC_DSN`, `POSTGRES_CDC_TABLES_JSON`, and `POSTGRES_CDC_TOPIC` are the only per-app overrides needed.
+- Metadata from Redpanda Connect is copied into the payload so Moose streaming functions can access it without Bloblang helpers.
+- The HTTP server defaults to `0.0.0.0:4195`, but ports can be remapped via `POSTGRES_CDC_HTTP_PORT` in docker compose.
 
 ## PostgreSQL Setup
 
-The `setup-cdc.sh` script creates:
+The shared script `packages/shared/cdc/init-postgres-cdc.sh` creates:
 
 ### 1. Publication
 

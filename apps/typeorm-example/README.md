@@ -125,12 +125,12 @@ typeorm-example/
 │
 ├── docker-compose.oltp.yaml           # PostgreSQL service
 ├── docker-compose.dev.override.yaml   # CDC services
-├── redpanda-connect.yaml              # CDC configuration
+├── (uses ../../packages/shared/cdc/redpanda-connect.template.yaml)
 ├── moose.config.toml                  # Moose settings
 │
 ├── start-oltp.sh           # Start OLTP (PostgreSQL + setup)
 ├── moose-cdc-setup.sh      # CDC setup hook (auto-run by Moose)
-└── init-postgres.sh        # PostgreSQL init (auto-run by Docker)
+└── (uses ../../packages/shared/cdc/init-postgres-cdc.sh)
 ```
 
 ## 🎓 How It Works
