@@ -17,7 +17,7 @@ services:
       POSTGRES_CDC_TABLES: ${POSTGRES_CDC_TABLES:-customers,products,orders,order_items}
       POSTGRES_CDC_WAIT_FOR_TABLE: ${POSTGRES_CDC_WAIT_FOR_TABLE:-customers}
     volumes:
-      - ../../packages/shared/cdc/init-postgres-cdc.sh:/init-postgres-cdc.sh:ro
+      - ${PWD}/../../packages/shared/cdc/init-postgres-cdc.sh:/init-postgres-cdc.sh:ro
     command: ["/bin/sh", "/init-postgres-cdc.sh"]
     restart: "no"
     networks:
@@ -30,7 +30,7 @@ services:
       cdc-setup:
         condition: service_completed_successfully
     volumes:
-      - ../../packages/shared/cdc/redpanda-connect.template.yaml:/connect.yaml:ro
+      - ${PWD}/../../packages/shared/cdc/redpanda-connect.template.yaml:/connect.yaml:ro
     command: ["run", "/connect.yaml"]
     ports:
       - "${POSTGRES_CDC_HTTP_PORT:-4195}:4195"
