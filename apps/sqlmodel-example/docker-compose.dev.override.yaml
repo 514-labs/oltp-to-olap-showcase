@@ -1,56 +1,52 @@
 version: "3.8"
 
 services:
-  # CDC Setup - Runs once to create publication
   cdc-setup:
     image: postgres:15-alpine
-    container_name: sqlalchemy-cdc-setup
+    container_name: ${CDC_SETUP_CONTAINER_NAME:-sqlmodel-cdc-setup}
     depends_on:
       - redpanda
-    command: >
-      sh -c "
-      echo '⏳ Waiting for tables to be created by FastAPI...';
-      while ! PGPASSWORD=postgres psql -h sqlmodel-postgres -U postgres -d sqlmodel_db -c \"SELECT 1 FROM information_schema.tables WHERE table_name = 'customers' LIMIT 1\" | grep -q 1; do
-        echo '   Tables not ready yet, waiting 5s...';
-        sleep 5;
-      done;
-      echo '✅ Tables created!';
-      echo '📡 Creating CDC publication...';
-      PGPASSWORD=postgres psql -h sqlmodel-postgres -U postgres -d sqlmodel_db <<-EOSQL
-        DO \$\$
-        BEGIN
-          IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'redpanda_cdc_publication') THEN
-            CREATE PUBLICATION redpanda_cdc_publication FOR ALL TABLES;
-            RAISE NOTICE 'Publication created';
-          ELSE
-            RAISE NOTICE 'Publication already exists';
-          END IF;
-        END
-        \$\$;
-      EOSQL
-      echo '✅ CDC publication ready!';
-      echo '🎉 CDC Setup Complete!';
-      tail -f /dev/null
-      "
+    environment:
+      PGHOST: ${OLTP_POSTGRES_CONTAINER:-sqlmodel-postgres}
+      PGPORT: 5432
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGDATABASE: ${OLTP_POSTGRES_DB:-sqlmodel_db}
+      POSTGRES_CDC_PUBLICATION: ${POSTGRES_CDC_PUBLICATION:-redpanda_cdc_publication}
+      POSTGRES_CDC_SLOT: ${POSTGRES_CDC_SLOT:-redpanda_cdc_slot}
+      POSTGRES_CDC_SCHEMA: ${POSTGRES_CDC_SCHEMA:-public}
+      POSTGRES_CDC_TABLES: ${POSTGRES_CDC_TABLES:-customer,product,order,orderitem}
+      POSTGRES_CDC_WAIT_FOR_TABLE: ${POSTGRES_CDC_WAIT_FOR_TABLE:-customer}
+    volumes:
+      - ${PWD}/../../packages/shared/cdc/init-postgres-cdc.sh:/init-postgres-cdc.sh:ro
+    command: ["/bin/sh", "/init-postgres-cdc.sh"]
     networks:
       - default
       - sqlmodel-network
-    restart: unless-stopped
+    restart: "no"
 
-  # Redpanda Connect - CDC Connector
   redpanda-connect:
     image: docker.redpanda.com/redpandadata/connect:latest
-    container_name: redpanda-connect
+    container_name: ${CDC_CONNECT_CONTAINER_NAME:-sqlmodel-redpanda-connect}
     depends_on:
       - cdc-setup
       - redpanda
     environment:
-      REDPANDA_LICENSE: ${REDPANDA_LICENSE}
+      REDPANDA_LICENSE: ${REDPANDA_LICENSE:-}
+      LOG_LEVEL: ${CDC_LOG_LEVEL:-info}
+      POSTGRES_CDC_DSN: ${POSTGRES_CDC_DSN:-postgresql://postgres:postgres@sqlmodel-postgres:5432/sqlmodel_db?sslmode=disable}
+      POSTGRES_CDC_SCHEMA: ${POSTGRES_CDC_SCHEMA:-public}
+      POSTGRES_CDC_SLOT: ${POSTGRES_CDC_SLOT:-redpanda_cdc_slot}
+      POSTGRES_CDC_PUBLICATION: ${POSTGRES_CDC_PUBLICATION:-redpanda_cdc_publication}
+      POSTGRES_CDC_TABLES_JSON: '${POSTGRES_CDC_TABLES_JSON:-["customer","product","order","orderitem"]}'
+      POSTGRES_CDC_TOPIC: ${POSTGRES_CDC_TOPIC:-sqlmodel_cdc_events}
+      POSTGRES_CDC_BROKER_ADDRESS: ${POSTGRES_CDC_BROKER_ADDRESS:-redpanda:9092}
+      POSTGRES_CDC_HTTP_ADDR: ${POSTGRES_CDC_HTTP_ADDR:-0.0.0.0:4195}
     volumes:
-      - ../redpanda-connect.yaml:/connect.yaml:ro
+      - ${PWD}/../../packages/shared/cdc/redpanda-connect.template.yaml:/connect.yaml:ro
     command: ["run", "/connect.yaml"]
     ports:
-      - "4196:4195"
+      - "${POSTGRES_CDC_HTTP_PORT:-4196}:4195"
     networks:
       - default
       - sqlmodel-network
@@ -59,3 +55,4 @@ services:
 networks:
   sqlmodel-network:
     external: true
+    name: ${OLTP_POSTGRES_NETWORK:-sqlmodel-network}

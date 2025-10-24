@@ -1,95 +1,55 @@
 # Moose CDC Extension - Docker Compose Override
-#
-# This file extends the base Moose infrastructure with CDC capabilities.
-# It connects to your existing OLTP PostgreSQL database and streams changes.
-#
-# Prerequisites:
-#   1. OLTP application must be running: ./start-oltp.sh
-#   2. PostgreSQL must be accessible on the oltp-network
-#   3. REDPANDA_LICENSE must be set: export REDPANDA_LICENSE="your_key"
-#
-# Start: moose dev
+# This version relies on shared CDC templates from packages/shared/cdc.
 
 services:
-  # CDC Setup - Creates publication and replication slot in OLTP PostgreSQL
-  # Connects to the external OLTP database and sets up CDC infrastructure
   cdc-setup:
     image: postgres:15-alpine
-    container_name: redpanda-pg-cdc-setup
+    container_name: ${CDC_SETUP_CONTAINER_NAME:-typeorm-cdc-setup}
     environment:
-      PGHOST: typeorm-oltp-postgres
+      PGHOST: ${OLTP_POSTGRES_CONTAINER:-typeorm-oltp-postgres}
       PGPORT: 5432
-      PGUSER: postgres
-      PGPASSWORD: postgres
-      PGDATABASE: typeorm_db
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGDATABASE: ${OLTP_POSTGRES_DB:-typeorm_db}
+      POSTGRES_CDC_PUBLICATION: ${POSTGRES_CDC_PUBLICATION:-redpanda_cdc_publication}
+      POSTGRES_CDC_SLOT: ${POSTGRES_CDC_SLOT:-redpanda_cdc_slot}
+      POSTGRES_CDC_SCHEMA: ${POSTGRES_CDC_SCHEMA:-public}
+      POSTGRES_CDC_TABLES: ${POSTGRES_CDC_TABLES:-customers,products,orders,order_items}
+      POSTGRES_CDC_WAIT_FOR_TABLE: ${POSTGRES_CDC_WAIT_FOR_TABLE:-customers}
     volumes:
-      - ../init-postgres.sh:/init-postgres.sh:ro
-    command: >
-      sh -c "
-        echo '🔍 Checking OLTP database connection...';
-
-        # Wait for PostgreSQL to be accessible
-        for i in 1 2 3 4 5 6 7 8 9 10; do
-          if psql -c 'SELECT 1' > /dev/null 2>&1; then
-            echo '✅ Connected to OLTP PostgreSQL';
-            break;
-          fi;
-          if [ $$i -eq 10 ]; then
-            echo '❌ Cannot connect to OLTP PostgreSQL';
-            echo '   Make sure to start OLTP first: ./start-oltp.sh';
-            exit 1;
-          fi;
-          echo \"  Attempt $$i/10: PostgreSQL not accessible, waiting 3s...\";
-          sleep 3;
-        done;
-
-        echo '';
-        echo '⏳ Waiting for OLTP tables to exist...';
-        for i in 1 2 3 4 5 6 7 8 9 10; do
-          if psql -tAc \"SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='customers'\" | grep -q 1; then
-            echo '✅ OLTP tables found';
-            echo '';
-            echo '📡 Creating CDC publication...';
-            /init-postgres.sh;
-            exit 0;
-          fi;
-          if [ $$i -eq 10 ]; then
-            echo '❌ OLTP tables not found after 30s';
-            echo '   Tables must exist before CDC can be set up.';
-            echo '   The tables should have been created by ./start-oltp.sh';
-            exit 1;
-          fi;
-          echo \"  Attempt $$i/10: Tables not found, waiting 3s...\";
-          sleep 3;
-        done;
-      "
+      - ${PWD}/../../packages/shared/cdc/init-postgres-cdc.sh:/init-postgres-cdc.sh:ro
+    command: ["/bin/sh", "/init-postgres-cdc.sh"]
     restart: "no"
     networks:
       - oltp-network
 
-  # CDC Connector - Redpanda Connect with PostgreSQL CDC
-  # Streams changes from OLTP PostgreSQL to Redpanda topics
-  # Requires: REDPANDA_LICENSE environment variable
   redpanda-connect:
     image: docker.redpanda.com/redpandadata/connect:latest
-    container_name: redpanda-connect
+    container_name: ${CDC_CONNECT_CONTAINER_NAME:-typeorm-redpanda-connect}
     depends_on:
       cdc-setup:
         condition: service_completed_successfully
     volumes:
-      - ../redpanda-connect.yaml:/connect.yaml:ro
+      - ${PWD}/../../packages/shared/cdc/redpanda-connect.template.yaml:/connect.yaml:ro
     command: ["run", "/connect.yaml"]
     ports:
-      - "4195:4195" # HTTP API for health checks and metrics
+      - "${POSTGRES_CDC_HTTP_PORT:-4195}:4195"
     environment:
       REDPANDA_LICENSE: ${REDPANDA_LICENSE:-}
-      LOG_LEVEL: "info"
+      LOG_LEVEL: ${CDC_LOG_LEVEL:-info}
+      POSTGRES_CDC_DSN: ${POSTGRES_CDC_DSN:-postgres://postgres:postgres@typeorm-oltp-postgres:5432/typeorm_db?sslmode=disable}
+      POSTGRES_CDC_SCHEMA: ${POSTGRES_CDC_SCHEMA:-public}
+      POSTGRES_CDC_SLOT: ${POSTGRES_CDC_SLOT:-redpanda_cdc_slot}
+      POSTGRES_CDC_PUBLICATION: ${POSTGRES_CDC_PUBLICATION:-redpanda_cdc_publication}
+      POSTGRES_CDC_TABLES_JSON: '${POSTGRES_CDC_TABLES_JSON:-["customers","products","orders","order_items"]}'
+      POSTGRES_CDC_TOPIC: ${POSTGRES_CDC_TOPIC:-typeorm_cdc_events}
+      POSTGRES_CDC_BROKER_ADDRESS: ${POSTGRES_CDC_BROKER_ADDRESS:-redpanda:9092}
+      POSTGRES_CDC_HTTP_ADDR: ${POSTGRES_CDC_HTTP_ADDR:-0.0.0.0:4195}
     networks:
-      - oltp-network # Connect to OLTP PostgreSQL
-      - default # Connect to Moose Redpanda
+      - oltp-network
+      - default
 
-# External networks
 networks:
   oltp-network:
     external: true
-    name: oltp-network
+    name: ${OLTP_POSTGRES_NETWORK:-oltp-network}

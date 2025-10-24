@@ -344,7 +344,7 @@ export REDPANDA_LICENSE="your_license_key_here"
 1. **Check PostgreSQL data exists:**
    ```bash
    # TypeORM
-   docker exec -it typeorm-postgres psql -U postgres -d typeorm_db -c "SELECT COUNT(*) FROM customers;"
+   docker exec -it typeorm-oltp-postgres psql -U postgres -d typeorm_db -c "SELECT COUNT(*) FROM customers;"
 
    # SQLModel
    docker exec -it sqlmodel-postgres psql -U postgres -d sqlalchemy_db -c "SELECT COUNT(*) FROM customer;"
@@ -363,7 +363,7 @@ export REDPANDA_LICENSE="your_license_key_here"
    SHOW TABLES FROM local;
    ```
 
-5. **Review table names match:** Check `redpanda-connect.yaml` matches actual PostgreSQL table names
+5. **Review table names match:** Ensure `POSTGRES_CDC_TABLES` / `POSTGRES_CDC_TABLES_JSON` in your compose file includes the correct tables
 
 ### Port already in use
 
@@ -395,7 +395,7 @@ netsh interface ipv4 show excludedportrange protocol=tcp
 ### Customize for Your Use Case
 
 1. **Modify the models** - Add your own entities
-2. **Update CDC config** - Adjust `redpanda-connect.yaml`
+2. **Update CDC config** - Override the `POSTGRES_CDC_*` environment variables that feed the shared template in `packages/shared/cdc`
 3. **Create transformations** - Edit Moose functions in `app/`
 4. **Design analytics tables** - Optimize for your queries
 

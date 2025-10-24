@@ -9,7 +9,7 @@
     "build:all": "npm run build && moose-cli build",
     "update-moose": "pnpm update @514labs/moose-lib @514labs/moose-cli",
     "start-oltp": "./start-oltp.sh",
-    "stop-oltp": "docker compose -f docker-compose.oltp.yaml down",
+    "stop-oltp": "docker compose -f ../../packages/shared/cdc/docker-compose.postgres.yaml -f docker-compose.oltp.yaml down",
     "kafka-pull": "moose kafka pull localhost:19092 --path ./app/streams",
     "setup-db": "tsx src/setup-db.ts",
     "dev": "tsx watch src/index.ts",

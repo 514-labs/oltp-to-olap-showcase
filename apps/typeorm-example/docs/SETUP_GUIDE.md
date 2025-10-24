@@ -177,18 +177,13 @@ You run: `pnpm dev`
 services:
   cdc-setup:
     image: postgres:15-alpine
-    depends_on:
-      postgres:
-        condition: service_healthy
-    command: >
-      sh -c "
-        # Wait for tables to exist
-        until psql -tAc 'SELECT 1 FROM information_schema.tables WHERE table_name=''customers''';
-        do sleep 5; done;
-        
-        # Create publication
-        /init-postgres.sh;
-      "
+    environment:
+      PGHOST: ${OLTP_POSTGRES_CONTAINER:-typeorm-oltp-postgres}
+      PGDATABASE: ${OLTP_POSTGRES_DB:-typeorm_db}
+      POSTGRES_CDC_TABLES: ${POSTGRES_CDC_TABLES:-customers,products,orders,order_items}
+    volumes:
+      - ../../packages/shared/cdc/init-postgres-cdc.sh:/init-postgres-cdc.sh:ro
+    command: ["/bin/sh", "/init-postgres-cdc.sh"]
     restart: 'no' # One-time service
 ```
 
@@ -225,10 +220,10 @@ Only starts after publication exists.
 **Error:**
 
 ```
-Error mounting ".moose/redpanda-connect.yaml" ... not a directory
+Error mounting ".moose/connect.yaml" ... not a directory
 ```
 
-**Cause:** `.moose/redpanda-connect.yaml` existed as a directory instead of a file.
+**Cause:** `.moose/connect.yaml` existed as a directory instead of a file.
 
 **Fix:** Copy config file properly.
 
@@ -337,7 +332,7 @@ docker logs typeorm-redpanda-connect
    ```
    field X not recognised
    ```
-   **Fix:** Check `redpanda-connect.yaml` syntax
+**Fix:** Check the environment variables feeding `connect.yaml`
 
 ### "Waiting for Tables" Persists
 
@@ -424,8 +419,8 @@ docker exec redpanda rpk topic consume typeorm.public.customers --num 1
 | File                               | Purpose                                  |
 | ---------------------------------- | ---------------------------------------- |
 | `docker-compose.dev.override.yaml` | Service definitions and dependencies     |
-| `init-postgres.sh`                 | Creates publication and replication slot |
-| `redpanda-connect.yaml`            | Redpanda Connect CDC configuration       |
+| `../../packages/shared/cdc/init-postgres-cdc.sh` | Creates publication and replication slot |
+| `../../packages/shared/cdc/redpanda-connect.template.yaml` | Redpanda Connect CDC configuration |
 | `setup-cdc.sh`                     | Moose hook to verify setup               |
 
 ---

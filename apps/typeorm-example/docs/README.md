@@ -56,15 +56,15 @@ Complete documentation for the TypeORM → Moose OLAP migration with real-time C
 ## 📁 Project Files
 
 ### Configuration
-- `docker-compose.oltp.yaml` - OLTP PostgreSQL service
+- `docker-compose.oltp.yaml` - OLTP PostgreSQL service (overlays shared template)
 - `docker-compose.dev.override.yaml` - CDC services (Moose/Redpanda)
-- `redpanda-connect.yaml` - CDC connector configuration
+- `../../packages/shared/cdc/redpanda-connect.template.yaml` - shared CDC connector template
 - `moose.config.toml` - Moose framework settings
 
 ### Scripts
 - `start-oltp.sh` - Start OLTP application (PostgreSQL + setup tables)
 - `moose-cdc-setup.sh` - CDC setup hook (runs on Moose first start)
-- `init-postgres.sh` - PostgreSQL initialization (creates publication/replication slot)
+- `../../packages/shared/cdc/init-postgres-cdc.sh` - shared PostgreSQL CDC bootstrap script
 
 ### Source Code
 - `src/entities/` - TypeORM OLTP entities
@@ -88,7 +88,7 @@ Complete documentation for the TypeORM → Moose OLAP migration with real-time C
 
 ### Topic shows "typeorm.public.null"
 **Symptom:** Wrong topic name in CDC events
-**Solution:** Check redpanda-connect.yaml configuration
+**Solution:** Check the `POSTGRES_CDC_*` environment variables and shared template in `packages/shared/cdc/redpanda-connect.template.yaml`
 
 ## 🎓 External Resources
 

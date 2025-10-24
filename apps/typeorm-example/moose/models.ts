@@ -7,12 +7,13 @@ type ExtractFields<T> = {
 };
 
 export type RedpandaPgCdcPayload<T> = {
-  _metadata: {
+  metadata: {
     table: string;
     operation: 'delete' | 'insert' | 'update' | 'read';
     lsn: string; // PostgreSQL LSN is a hex string like '0/1234567'
   };
-} & T;
+  payload: T;
+};
 
 export type CdcFields = {
   is_deleted: UInt8;
