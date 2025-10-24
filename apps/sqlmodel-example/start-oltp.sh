@@ -4,6 +4,18 @@ set -euo pipefail
 BASE_DIR=$(cd "$(dirname "$0")" && pwd)
 SHARED_COMPOSE="$BASE_DIR/../../packages/shared/cdc/docker-compose.postgres.yaml"
 APP_COMPOSE="$BASE_DIR/docker-compose.oltp.yaml"
+ENV_FILE="$BASE_DIR/.env"
+
+# Load .env file if it exists
+if [ -f "$ENV_FILE" ]; then
+  echo "📝 Loading environment variables from .env..."
+  set -a  # automatically export all variables
+  source "$ENV_FILE"
+  set +a
+else
+  echo "⚠️  No .env file found at $ENV_FILE"
+  echo "   Using default values. To customize, create .env from env.example"
+fi
 
 OLTP_CONTAINER="${OLTP_POSTGRES_CONTAINER:-sqlmodel-postgres}"
 OLTP_PORT="${OLTP_POSTGRES_PORT:-5434}"
@@ -18,9 +30,14 @@ echo "════════════════════════�
 echo "  Starting OLTP Application (SQLModel + PostgreSQL)"
 echo "════════════════════════════════════════════════════════════"
 echo ""
+echo "🔧 Configuration:"
+echo "   • Container: $OLTP_CONTAINER"
+echo "   • Port: $OLTP_PORT"
+echo "   • Database: $OLTP_DB"
+echo ""
 
 echo "📦 Step 1: Starting PostgreSQL..."
-docker compose -f "$SHARED_COMPOSE" -f "$APP_COMPOSE" up -d
+docker compose -f "$SHARED_COMPOSE" -f "$APP_COMPOSE" --env-file "$ENV_FILE" up -d
 
 echo "⏳ Waiting for PostgreSQL to be ready..."
 for i in {1..30}; do
