@@ -4,6 +4,12 @@
 
 Stream changes from your OLTP database to OLAP analytics in real-time using Change Data Capture. Multiple ORM implementations (TypeORM and SQLModel) showing the same architecture!
 
+## New here? Start with this checklist
+
+1. **Skim the architecture diagram** below to understand the moving pieces in the CDC pipeline.
+2. **Pick an implementation path** (TypeScript/TypeORM or Python/SQLModel) using the comparison guide in the Quick Start section.
+3. **Run the full stack locally** following QUICKSTART.md, then verify your setup with the ClickHouse queries linked in the new "Verify Your Setup" section.
+
 ## What This Demonstrates
 
 A complete, working example of an OLTP-to-OLAP CDC pipeline with:
@@ -44,6 +50,13 @@ A complete, working example of an OLTP-to-OLAP CDC pipeline with:
 ```
 
 ## Quick Start
+
+### Choose your path
+
+| Stack | Language & Runtime | Ideal if you want… | Services to run |
+| --- | --- | --- | --- |
+| **TypeORM Example** | TypeScript on Node.js | A production-ready reference with rich docs and automated scripts | 2 terminals (Moose + combined OLTP/API script) |
+| **SQLModel Example** | Python on FastAPI | To explore SQLModel's unified ORM + validation models | 3 terminals (PostgreSQL, Moose, FastAPI) |
 
 **Prerequisites:**
 - Docker and Docker Compose
@@ -105,6 +118,13 @@ pnpm install && pnpm dev
 
 Visit http://localhost:3001 to create data and watch CDC in action.
 
+### Verify Your Setup
+
+Once data is flowing, confirm the end-to-end pipeline with:
+
+- **ClickHouse queries:** Run the example analytics queries in [apps/typeorm-example/docs/OLAP_CONVERSION_GUIDE.md](apps/typeorm-example/docs/OLAP_CONVERSION_GUIDE.md) to ensure denormalized tables are populated.
+- **Moose dashboards:** Use the Moose UI started by `moose dev` (default http://localhost:4200) to inspect job status and processed events.
+
 ## Documentation
 
 ### Getting Started
@@ -138,9 +158,14 @@ oltp-to-olap-showcase/
 │   ├── prisma-example/        # WIP - Not functional
 │   └── sequelize-example/     # WIP - Not functional
 │
+├── packages/
+│   └── shared/                # Reusable TypeScript utilities shared across apps
+│
 ├── QUICKSTART.md
 └── README.md
 ```
+
+The `packages/shared` workspace houses Express middleware, route helpers, and ClickHouse schema utilities that multiple apps import. Explore it before duplicating infrastructure code inside individual implementations.
 
 ## How It Works
 
@@ -260,16 +285,16 @@ ORDER BY revenue DESC;
 ## Key Concepts
 
 **Change Data Capture (CDC)**
-Captures database changes from PostgreSQL's Write-Ahead Log. No polling, no triggers - log-based replication with minimal overhead.
+Captures database changes from PostgreSQL's Write-Ahead Log. No polling, no triggers - log-based replication with minimal overhead. See the Redpanda Connect configuration in [`apps/typeorm-example/docker/redpanda/redpanda-connect.yaml`](apps/typeorm-example/docker/redpanda/redpanda-connect.yaml).
 
 **Denormalization**
-Pre-joining related data for fast analytics. Instead of JOINing orders with customers at query time, customer data is embedded in the order fact table.
+Pre-joining related data for fast analytics. Instead of JOINing orders with customers at query time, customer data is embedded in the order fact table. Explore the Moose definition in [`apps/typeorm-example/app/order_fact.ts`](apps/typeorm-example/app/order_fact.ts) or the Python equivalent [`apps/sqlalchemy-example/app/order_fact.py`](apps/sqlalchemy-example/app/order_fact.py).
 
 **Star Schema**
-Fact tables (orders, order items) and dimension tables (customers, products) optimized for analytical queries and aggregations.
+Fact tables (orders, order items) and dimension tables (customers, products) optimized for analytical queries and aggregations. See the complete star schema layout in [`apps/typeorm-example/app/index.ts`](apps/typeorm-example/app/index.ts).
 
 **Real-time Processing**
-Changes appear in ClickHouse within milliseconds, enabling live dashboards and up-to-the-second reporting.
+Changes appear in ClickHouse within milliseconds, enabling live dashboards and up-to-the-second reporting. Moose stream jobs defined in [`apps/typeorm-example/app/index.ts`](apps/typeorm-example/app/index.ts) (and mirrored in [`apps/sqlalchemy-example/app/index.py`](apps/sqlalchemy-example/app/index.py)) orchestrate the near-real-time loads.
 
 ## Contributing
 
