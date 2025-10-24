@@ -6,8 +6,6 @@ Transform SQLModel models into denormalized OLAP tables with real-time CDC repli
 
 > **What is SQLModel?** A modern Python library that combines SQLAlchemy (database) and Pydantic (validation) into a single, type-safe model definition. Created by Sebastián Ramírez (FastAPI's creator), it's designed specifically for FastAPI applications. See [Why SQLModel?](docs/WHY_SQLMODEL.md) for a detailed explanation.
 
-> **Note:** This directory is named `sqlalchemy-example` for consistency across the project, but the implementation now uses **SQLModel** (which is built on SQLAlchemy 2.0).
-
 ## What This Does
 
 - **SQLModel** models providing database + API validation in one
@@ -24,8 +22,8 @@ Transform SQLModel models into denormalized OLAP tables with real-time CDC repli
 
 ### Prerequisites
 
-- Python 3.10 or higher
-- Docker and Docker Compose
+- Python 3.12 or higher
+- Docker and Docker Compose installed
 - Redpanda Enterprise License - [Get free 30-day trial](https://redpanda.com/try-enterprise)
 
 ### Installation
@@ -44,44 +42,118 @@ pip install -e .
 
 ### Running the Application
 
-**Set Redpanda License:**
+**Step 1: Set Redpanda License**
+
 ```bash
 export REDPANDA_LICENSE="your_license_key_here"
 ```
 
-**Terminal 1: Start PostgreSQL**
+**Step 2: Start PostgreSQL**
+
 ```bash
+# Terminal 1
 ./start-oltp.sh
 ```
 
-**Terminal 2: Start Moose (CDC infrastructure)**
+**Expected Output:**
+```
+════════════════════════════════════════════════════════════
+  Starting OLTP Application (SQLModel + PostgreSQL)
+════════════════════════════════════════════════════════════
+
+📦 Step 1: Starting PostgreSQL...
+✅ PostgreSQL is ready
+
+════════════════════════════════════════════════════════════
+  ✅ OLTP Application Started Successfully!
+════════════════════════════════════════════════════════════
+
+PostgreSQL container: sqlmodel-postgres
+Host port: 5434
+Database: sqlmodel_db
+```
+
+**What this does:** Starts PostgreSQL with logical replication enabled (wal_level=logical) for CDC.
+
+**Step 3: Start Moose (CDC infrastructure)**
+
 ```bash
+# Terminal 2
 moose dev
 ```
 
-Expected output: `⏳ Waiting for tables to be created...`
+**Expected Output:**
+```
+🟢 Moose is running
+⏳ Waiting for tables to be created...
+```
 
-**Terminal 3: Initialize database and start API**
+**What this does:** Starts the complete CDC stack:
+- Redpanda (Kafka-compatible message broker)
+- Redpanda Connect (PostgreSQL CDC connector)
+- ClickHouse (OLAP database)
+- Moose streaming functions
+
+**Step 4: Initialize database and start API**
+
 ```bash
-# First time: create tables
+# Terminal 3: Initialize database (first time only)
 python init_db.py
+```
 
+**Expected Output:**
+```
+Creating all tables...
+✅ Tables created successfully!
+```
+
+```bash
 # Start FastAPI server
 fastapi dev src/main.py --port 3002
 ```
 
-### Verify It's Working
-
-**Health Check:**
-```bash
-curl http://localhost:3002/health
+**Expected Output:**
+```
+INFO:     Uvicorn running on http://127.0.0.1:3002
+INFO:     Application startup complete
 ```
 
-**API Documentation:**
-- Swagger UI: http://localhost:3002/docs
-- ReDoc: http://localhost:3002/redoc
+**What this does:**
+1. **init_db.py**: Creates SQLModel tables in PostgreSQL
+2. **fastapi dev**: Starts the FastAPI API server, which triggers CDC setup
+3. CDC setup automatically creates publication and replication slot
+4. Redpanda Connect begins streaming changes to ClickHouse
 
-**Create Test Data:**
+**Check CDC is running:** Terminal 2 (Moose) should now show:
+```
+✅ CDC connector started successfully
+🔄 Streaming changes from PostgreSQL to ClickHouse
+```
+
+### Verify the CDC Pipeline
+
+**Step 1: Check all services are healthy**
+
+```bash
+# PostgreSQL health
+docker exec -it sqlmodel-postgres pg_isready
+
+# API health
+curl http://localhost:3002/health
+
+# Redpanda Connect health
+curl http://localhost:4196/ready
+
+# Expected: {"status": "ok"}
+```
+
+**Step 2: View API documentation**
+
+- **Swagger UI**: http://localhost:3002/docs (interactive API testing)
+- **ReDoc**: http://localhost:3002/redoc (clean documentation view)
+
+**Step 3: Create test data**
+
 ```bash
 # Create a customer
 curl -X POST http://localhost:3002/api/customers \
@@ -93,6 +165,9 @@ curl -X POST http://localhost:3002/api/customers \
     "city": "San Francisco"
   }'
 
+# Expected response:
+# {"id": 1, "email": "jane@example.com", "name": "Jane Doe", "country": "USA", "city": "San Francisco"}
+
 # Create a product
 curl -X POST http://localhost:3002/api/products \
   -H "Content-Type: application/json" \
@@ -101,17 +176,126 @@ curl -X POST http://localhost:3002/api/products \
     "category": "Electronics",
     "price": "29.99"
   }'
+
+# Expected response:
+# {"id": 1, "name": "Wireless Mouse", "category": "Electronics", "price": 29.99}
+
+# Create an order
+curl -X POST http://localhost:3002/api/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customerId": 1,
+    "status": "pending",
+    "total": "29.99"
+  }'
+
+# Expected response:
+# {"id": 1, "customerId": 1, "status": "pending", "total": 29.99, ...}
 ```
 
-**Verify CDC Pipeline:**
+**Step 4: Verify data in PostgreSQL (source)**
+
+```bash
+# Connect to PostgreSQL
+docker exec -it sqlmodel-postgres psql -U postgres -d sqlmodel_db
+
+# Query data
+SELECT * FROM customer;
+SELECT * FROM product;
+SELECT * FROM "order";
+
+# Exit PostgreSQL
+\q
+```
+
+**Expected Output:**
+```
+ id |      email       |   name   | country |      city
+----+------------------+----------+---------+----------------
+  1 | jane@example.com | Jane Doe | USA     | San Francisco
+```
+
+**Step 5: Check CDC publication and slot**
+
+```bash
+docker exec -it sqlmodel-postgres psql -U postgres -d sqlmodel_db -c "SELECT * FROM pg_publication;"
+```
+
+**Expected Output:**
+```
+         pubname          | pubowner | puballtables | pubinsert | pubupdate | pubdelete
+--------------------------+----------+--------------+-----------+-----------+-----------
+ redpanda_cdc_publication |       10 | f            | t         | t         | t
+```
+
+```bash
+docker exec -it sqlmodel-postgres psql -U postgres -d sqlmodel_db -c "SELECT slot_name, plugin, active FROM pg_replication_slots;"
+```
+
+**Expected Output:**
+```
+      slot_name       |  plugin  | active
+----------------------+----------+--------
+ redpanda_cdc_slot    | pgoutput | t
+```
+
+**Step 6: Verify data in ClickHouse (destination)**
+
 ```bash
 # Connect to ClickHouse
 docker exec -it moose-clickhouse clickhouse-client -u panda --password pandapass
 
-# Query the data (should appear within seconds)
-SELECT * FROM local.customer_dim LIMIT 5;
-SELECT * FROM local.product_dim LIMIT 5;
+# Query denormalized dimension tables
+SELECT * FROM local.customer_dim LIMIT 10;
+SELECT * FROM local.product_dim LIMIT 10;
+
+# Query denormalized fact tables
+SELECT * FROM local.order_fact LIMIT 10;
+SELECT * FROM local.orderitem_fact LIMIT 10;
+
+# Exit ClickHouse
+exit
 ```
+
+**Expected Output for customer_dim:**
+```
+┌─customer_id─┬─customer_name─┬─customer_email───┬─country─┬─city───────────┬─is_deleted─┬──────────lsn─┐
+│           1 │ Jane Doe      │ jane@example.com │ USA     │ San Francisco  │          0 │ 0/1A2B3C4    │
+└─────────────┴───────────────┴──────────────────┴─────────┴────────────────┴────────────┴──────────────┘
+```
+
+**Step 7: Verify real-time CDC is working**
+
+```bash
+# Update a customer
+curl -X PATCH http://localhost:3002/api/customers/1 \
+  -H "Content-Type: application/json" \
+  -d '{"city": "Los Angeles"}'
+
+# Wait 2-3 seconds for CDC to process
+
+# Query ClickHouse again
+docker exec -it moose-clickhouse clickhouse-client -u panda --password pandapass \
+  -q "SELECT customer_id, customer_name, city, lsn FROM local.customer_dim WHERE customer_id = 1 ORDER BY lsn DESC LIMIT 5;"
+```
+
+**Expected:** You should see the updated city value, demonstrating real-time CDC!
+
+### Test with Interactive UI (Optional)
+
+```bash
+# Terminal 4: Start test client
+cd ../test-client
+pnpm install
+pnpm dev
+```
+
+Visit http://localhost:3001 to:
+- Generate random customers and products
+- Create orders with multiple items
+- Update order status
+- Delete orders
+- Watch real-time CDC in action
 
 ## Project Structure
 
@@ -168,6 +352,7 @@ class OrderInsert(OrderBase):
 ```
 
 **Key benefit:** This single model definition provides:
+
 - Database table structure (via SQLAlchemy 2.0)
 - Automatic Pydantic validation
 - JSON serialization for FastAPI responses
@@ -182,6 +367,7 @@ SQLModel          PostgreSQL        Redpanda         Moose           ClickHouse
 ```
 
 **How SQLModel integrates:**
+
 1. SQLModel defines the database schema (via SQLAlchemy 2.0)
 2. FastAPI endpoints validate requests (via Pydantic)
 3. Data is inserted into PostgreSQL
@@ -197,8 +383,8 @@ Denormalized tables optimized for analytics:
 export interface OrderFact {
   order_id: UInt64;
   customer_id: UInt64;
-  customer_name: string;    // Denormalized from customer
-  customer_email: string;   // Denormalized from customer
+  customer_name: string; // Denormalized from customer
+  customer_email: string; // Denormalized from customer
   status: string;
   total: Float64;
   order_date: DateTime;
@@ -274,36 +460,42 @@ def create(customer: CustomerInsert, db: Session):
 ### Why SQLModel?
 
 **Single Source of Truth**
+
 - One model definition = database table + API schema
 - No need for separate SQLAlchemy and Pydantic models
 - Reduces code by 40-60% compared to traditional approach
 - Less duplication = fewer bugs
 
 **Automatic Validation**
+
 - Pydantic validation built into every model
 - Field-level constraints (min/max length, numeric ranges, regex patterns)
 - FastAPI automatically returns 422 with detailed validation errors
 - No manual validation code needed
 
 **Type Safety**
+
 - Full type hints throughout the stack
 - Editor autocomplete and type checking
 - Catch errors before runtime with mypy
 - Modern Python 3.10+ union types (`int | None`)
 
 **Developer Experience**
+
 - Less boilerplate code
 - Automatic OpenAPI/Swagger documentation
 - JSON serialization built-in
 - Designed specifically for FastAPI by FastAPI's creator
 
 **Built on Proven Tech**
+
 - SQLAlchemy 2.0 for database operations
 - Pydantic v2 for validation (Rust-powered, super fast)
 - Full access to SQLAlchemy features when needed
 - Compatible with all SQLAlchemy extensions
 
 **CDC Ready**
+
 - Table names match CDC connector expectations: `customer`, `product`, `order`, `orderitem` (singular, no underscores)
 - Standard PostgreSQL logical replication
 - Works seamlessly with Redpanda Connect
@@ -312,16 +504,19 @@ def create(customer: CustomerInsert, db: Session):
 ## API Endpoints
 
 **Customers:**
+
 - `POST /api/customers` - Create customer
 - `GET /api/customers` - List all customers
 - `GET /api/customers/{id}` - Get customer by ID
 
 **Products:**
+
 - `POST /api/products` - Create product
 - `GET /api/products` - List all products
 - `GET /api/products/{id}` - Get product by ID
 
 **Orders:**
+
 - `POST /api/orders` - Create order
 - `GET /api/orders` - List all orders
 - `GET /api/orders/{id}` - Get order by ID
@@ -329,6 +524,7 @@ def create(customer: CustomerInsert, db: Session):
 - `DELETE /api/orders/{id}` - Delete order
 
 **Order Items:**
+
 - `POST /api/order-items` - Create order item
 - `GET /api/order-items` - List all order items
 
@@ -355,43 +551,365 @@ AUTO_INIT_DB=true fastapi dev src/main.py --port 3002
 
 Not recommended for production - use migrations instead.
 
-## Common Issues
+## Troubleshooting
 
-### SSL Connection Errors
+### PostgreSQL Won't Start
 
-**Issue:** CDC connector fails with SSL errors
+**Symptom:** `start-oltp.sh` fails or PostgreSQL container exits
 
-**Solution:** The CDC connector requires `?sslmode=disable` in the connection string. The default `POSTGRES_CDC_DSN` in `docker-compose.dev.override.yaml` already includes it.
+**Diagnostic:**
+```bash
+# Check if container is running
+docker ps | grep sqlmodel-postgres
+
+# Check container logs
+docker logs sqlmodel-postgres
+```
+
+**Solutions:**
+
+1. **Port conflict** - Another service using port 5434
+   ```bash
+   # Check what's using the port
+   lsof -i :5434
+
+   # Stop conflicting service or change port in docker-compose.oltp.yaml
+   ```
+
+2. **Docker daemon not running**
+   ```bash
+   # Start Docker Desktop or Docker daemon
+   ```
+
+3. **Insufficient resources**
+   ```bash
+   # Check Docker resources (Memory, CPU) in Docker Desktop settings
+   ```
+
+### "Waiting for tables" Persists in Moose
+
+**Symptom:** Moose shows "Waiting for tables to be created..." indefinitely
+
+**Cause:** SQLModel hasn't created tables yet, or `POSTGRES_CDC_WAIT_FOR_TABLE` references wrong table
+
+**Solutions:**
+
+1. **Run init_db.py** to create tables
+   ```bash
+   python init_db.py
+   ```
+
+2. **Check table name is correct**
+   ```bash
+   docker exec -it sqlmodel-postgres psql -U postgres -d sqlmodel_db -c "\dt"
+   # Verify "customer" table exists (not "customers")
+   ```
+
+3. **Verify table naming convention**
+   SQLModel uses **singular** table names by default: `customer`, `product`, `order`, `orderitem`
+
+### Redpanda Connect Won't Start
+
+**Symptom:** `redpanda-connect` container keeps restarting
+
+**Diagnostic:**
+```bash
+# Check logs
+docker logs sqlmodel-redpanda-connect
+
+# Check if it's running
+docker ps | grep redpanda-connect
+```
+
+**Solutions:**
+
+1. **Missing Redpanda license**
+   ```
+   Error: REDPANDA_LICENSE environment variable is required
+   ```
+   Solution:
+   ```bash
+   export REDPANDA_LICENSE="your_license_key_here"
+   # Restart Moose
+   ```
+
+2. **Invalid license**
+   ```
+   Error: invalid license
+   ```
+   Solution: Get a new license from https://redpanda.com/try-enterprise
+
+3. **CDC setup failed**
+   ```
+   Error: publication "redpanda_cdc_publication" does not exist
+   ```
+   Solution: Check cdc-setup container completed successfully
+   ```bash
+   docker logs sqlmodel-cdc-setup
+   # Should show "✅ CDC primitives ready"
+   ```
+
+4. **Wrong connection string (SSL error)**
+   ```
+   Error: failed to connect to PostgreSQL
+   ```
+   Solution: Verify DSN includes `?sslmode=disable`
+   ```bash
+   # In docker-compose.dev.override.yaml
+   POSTGRES_CDC_DSN: postgresql://postgres:postgres@sqlmodel-postgres:5432/sqlmodel_db?sslmode=disable
+   ```
+
+### No Data Appearing in ClickHouse
+
+**Symptom:** PostgreSQL has data but ClickHouse tables are empty
+
+**Diagnostic steps:**
+
+**Step 1: Verify Redpanda Connect is healthy**
+```bash
+curl http://localhost:4196/ready
+# Should return: {"status": "ok"}
+```
+
+**Step 2: Check if publication is tracking tables**
+```bash
+docker exec -it sqlmodel-postgres psql -U postgres -d sqlmodel_db
+
+SELECT * FROM pg_publication_tables WHERE pubname = 'redpanda_cdc_publication';
+# Should show: customer, product, order, orderitem
+```
+
+**Step 3: Check replication slot is active**
+```sql
+SELECT slot_name, active, restart_lsn FROM pg_replication_slots WHERE slot_name = 'redpanda_cdc_slot';
+-- active should be 't' (true)
+```
+
+**Step 4: Check Redpanda topic has events**
+```bash
+docker exec -it redpanda-0 rpk topic list
+# Should show: sqlmodel_cdc_events
+
+docker exec -it redpanda-0 rpk topic consume sqlmodel_cdc_events --num 5
+# Should show CDC events
+```
+
+**Step 5: Check Moose is consuming**
+```bash
+# Look at Moose console logs
+# Should show events being processed
+
+# Check Moose UI
+open http://localhost:5001
+```
+
+**Step 6: Verify ClickHouse tables exist**
+```bash
+docker exec -it moose-clickhouse clickhouse-client -u panda --password pandapass
+
+SHOW TABLES FROM local;
+-- Should show: customer_dim, product_dim, order_fact, orderitem_fact
+
+DESCRIBE local.customer_dim;
+-- Verify schema is correct
+```
 
 ### Table Name Mismatches
 
-**Issue:** CDC events not flowing to ClickHouse
+**Symptom:** CDC connector errors mentioning table names
 
-**Solution:** Ensure table names are singular without underscores:
-- `customer` not `customers`
-- `order` not `orders`
-- `orderitem` not `order_items`
+**Solution:** Ensure table names in all configs match exactly:
 
-Ensure `POSTGRES_CDC_TABLES` / `POSTGRES_CDC_TABLES_JSON` match your actual table names.
+SQLModel uses **singular** table names by default: `customer`, `product`, `order`, `orderitem`
 
-### Data Not Appearing in ClickHouse
+**Check these files:**
+1. `docker-compose.dev.override.yaml`:
+   ```yaml
+   POSTGRES_CDC_TABLES: customer,product,order,orderitem
+   POSTGRES_CDC_TABLES_JSON: ["customer","product","order","orderitem"]
+   POSTGRES_CDC_WAIT_FOR_TABLE: customer
+   ```
 
-**Troubleshooting steps:**
-1. Check Moose is running: `moose dev` output should show no errors
-2. Verify CDC connector: Check Redpanda Connect logs
-3. Query PostgreSQL: Ensure data exists in source tables
-4. Check ClickHouse: Tables should exist even if empty
-5. Review table naming: Must match exactly
+2. SQLModel models:
+   ```python
+   class Customer(SQLModel, table=True):
+       # table name defaults to "customer" (lowercase class name)
+       ...
+   ```
+
+**Note:** PostgreSQL requires double quotes for reserved words:
+```sql
+SELECT * FROM "order";  -- "order" is a reserved keyword
+```
+
+### Database Initialization Errors
+
+**Symptom:** `python init_db.py` fails
+
+**Diagnostic:**
+```bash
+# Check PostgreSQL is running
+docker exec -it sqlmodel-postgres pg_isready
+
+# Test connection manually
+docker exec -it sqlmodel-postgres psql -U postgres -d sqlmodel_db -c "SELECT 1;"
+```
+
+**Solutions:**
+
+1. **Connection refused**
+   ```
+   Error: could not connect to server
+   ```
+   Solution: Ensure PostgreSQL started successfully with `./start-oltp.sh`
+
+2. **Wrong DATABASE_URL**
+   ```
+   Error: connection to database failed
+   ```
+   Solution: Verify DATABASE_URL in your environment
+   ```bash
+   # Should be:
+   export DATABASE_URL="postgresql://postgres:postgres@localhost:5434/sqlmodel_db"
+   ```
+
+3. **Table already exists**
+   ```
+   Error: relation "customer" already exists
+   ```
+   Solution: This is usually fine, but you can drop tables first:
+   ```bash
+   python init_db.py --drop
+   ```
 
 ### Virtual Environment Issues
 
+**Symptom:** Import errors or missing dependencies
+
+**Solution:**
 ```bash
 # Recreate virtual environment
 rm -rf venv
 python -m venv venv
 source venv/bin/activate
 pip install -e .
+
+# Verify installation
+pip list | grep sqlmodel
+pip list | grep fastapi
 ```
+
+### API Won't Start
+
+**Symptom:** `fastapi dev` fails or crashes
+
+**Diagnostic:**
+```bash
+# Check for error messages in terminal
+# Common issues:
+
+# 1. Port already in use
+lsof -i :3002
+
+# 2. Missing dependencies
+pip install -e .
+
+# 3. Database connection failed
+docker exec -it sqlmodel-postgres pg_isready
+```
+
+**Solutions:**
+
+1. **Port conflict**
+   ```bash
+   # Use a different port
+   fastapi dev src/main.py --port 3003
+   ```
+
+2. **Database not initialized**
+   ```bash
+   # Create tables first
+   python init_db.py
+   ```
+
+### Replication Slot Lag
+
+**Symptom:** Data takes a long time to appear in ClickHouse
+
+**Check lag:**
+```bash
+docker exec -it sqlmodel-postgres psql -U postgres -d sqlmodel_db
+
+SELECT
+  slot_name,
+  active,
+  pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) / 1024 / 1024 AS lag_mb
+FROM pg_replication_slots
+WHERE slot_name = 'redpanda_cdc_slot';
+```
+
+**Solutions:**
+
+1. **Restart Redpanda Connect** if lag is growing
+   ```bash
+   docker restart sqlmodel-redpanda-connect
+   ```
+
+2. **Check Moose processing** - Slow transformations can cause backpressure
+   ```bash
+   # Monitor Moose console for slow queries
+   ```
+
+### Reset Everything
+
+**When all else fails, complete reset:**
+
+```bash
+# Stop all services
+docker compose -f ../../packages/shared/cdc/docker-compose.postgres.yaml \
+  -f docker-compose.oltp.yaml \
+  -f docker-compose.dev.override.yaml down -v
+
+# Remove volumes (WARNING: destroys all data)
+docker volume rm sqlmodel-example_postgres-data
+
+# Restart from scratch
+export REDPANDA_LICENSE="your_license_key"
+./start-oltp.sh    # Terminal 1
+moose dev          # Terminal 2
+python init_db.py  # Terminal 3
+fastapi dev src/main.py --port 3002  # Terminal 3 (after init completes)
+```
+
+### Enable Debug Logging
+
+**For more verbose output:**
+
+```yaml
+# In docker-compose.dev.override.yaml
+redpanda-connect:
+  environment:
+    LOG_LEVEL: debug  # Change from 'info' to 'debug'
+```
+
+Then restart:
+```bash
+docker restart sqlmodel-redpanda-connect
+docker logs -f sqlmodel-redpanda-connect
+```
+
+### Check Shared CDC Configuration
+
+For detailed information about the CDC infrastructure and environment variables:
+
+**See:** [Shared CDC Documentation](../../packages/shared/cdc/README.md)
+
+### More Help
+
+- **[Database Management Guide](docs/DATABASE_MANAGEMENT.md)** - Initialization strategies
+- **[FastAPI CLI Guide](docs/FASTAPI_CLI_GUIDE.md)** - Using the dev server
+- **[Why SQLModel?](docs/WHY_SQLMODEL.md)** - Understanding SQLModel benefits
+- **[Shared CDC README](../../packages/shared/cdc/README.md)** - Template system documentation
 
 ## Testing with the Test Client
 
@@ -405,6 +923,7 @@ pnpm dev
 ```
 
 Visit http://localhost:3001 to:
+
 - Generate random customers and products
 - Create orders with multiple items
 - Update order status
@@ -447,10 +966,10 @@ LIMIT 10;
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5434/sqlalchemy_db` | PostgreSQL connection |
-| `AUTO_INIT_DB` | `false` | Auto-create tables on startup (dev only) |
+| Variable       | Default                                                       | Description                              |
+| -------------- | ------------------------------------------------------------- | ---------------------------------------- |
+| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5434/sqlalchemy_db` | PostgreSQL connection                    |
+| `AUTO_INIT_DB` | `false`                                                       | Auto-create tables on startup (dev only) |
 
 ## Documentation
 
@@ -473,12 +992,14 @@ LIMIT 10;
 ### Why This Stack?
 
 **SQLModel + FastAPI = Perfect Match**
+
 - Both created by Sebastián Ramírez
 - Designed to work seamlessly together
 - Minimal boilerplate, maximum productivity
 - Industry-leading developer experience
 
 **Modern Python Best Practices**
+
 - Type hints throughout
 - Pydantic v2 for validation (Rust-powered performance)
 - SQLAlchemy 2.0 modern API
@@ -487,11 +1008,13 @@ LIMIT 10;
 ## Learn More
 
 ### Understanding SQLModel
+
 - **[Why SQLModel?](docs/WHY_SQLMODEL.md)** - Comprehensive guide to SQLModel's benefits
 - [SQLModel Documentation](https://sqlmodel.tiangolo.com/) - Official docs
 - [SQLModel GitHub](https://github.com/tiangolo/sqlmodel) - Source code and examples
 
 ### Core Technologies
+
 - [FastAPI Documentation](https://fastapi.tiangolo.com/) - Web framework
 - [SQLAlchemy 2.0 Documentation](https://docs.sqlalchemy.org/) - Database layer
 - [Pydantic Documentation](https://docs.pydantic.dev/) - Validation layer
@@ -499,6 +1022,7 @@ LIMIT 10;
 - [PostgreSQL Logical Replication](https://www.postgresql.org/docs/current/logical-replication.html) - CDC mechanism
 
 ### Project-Specific Guides
+
 - [Database Management](docs/DATABASE_MANAGEMENT.md) - Initialization strategies
 - [FastAPI CLI Guide](docs/FASTAPI_CLI_GUIDE.md) - Using the dev server
 - [Main README](../../README.md) - Full project overview
