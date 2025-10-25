@@ -10,27 +10,61 @@ import type {
   ApiResponse,
 } from './types';
 
-const API_BASE_URL = 'http://localhost:3002';
+const API_URL_KEY = 'test_client_api_url';
+const DEFAULT_API_URL = 'http://localhost:3002';
+
+// Custom event for triggering settings modal
+export const SHOW_SETTINGS_EVENT = 'show-api-settings';
+
+function getApiBaseUrl(): string {
+  // Priority: localStorage > env var > default
+  const stored = localStorage.getItem(API_URL_KEY);
+  if (stored) return stored;
+
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl) return envUrl;
+
+  return DEFAULT_API_URL;
+}
+
+function showSettingsModal(connectionError = false) {
+  window.dispatchEvent(
+    new CustomEvent(SHOW_SETTINGS_EVENT, { detail: { connectionError } })
+  );
+}
 
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
+  const apiBaseUrl = getApiBaseUrl();
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error?.message || 'API request failed');
+  try {
+    const response = await fetch(`${apiBaseUrl}${endpoint}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error?.message || 'API request failed');
+    }
+
+    if (response.status === 204) {
+      return {} as T;
+    }
+
+    return response.json();
+  } catch (error) {
+    // Check if it's a network/connection error
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.error(`[API] Connection failed to ${apiBaseUrl}${endpoint}`);
+      // Trigger settings modal on connection error
+      showSettingsModal(true);
+      throw new Error(`Unable to connect to backend at ${apiBaseUrl}. Please check your settings.`);
+    }
+    throw error;
   }
-
-  if (response.status === 204) {
-    return {} as T;
-  }
-
-  return response.json();
 }
 
 export const customersApi = {

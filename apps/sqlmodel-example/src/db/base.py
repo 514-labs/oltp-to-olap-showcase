@@ -15,13 +15,34 @@ from sqlmodel import SQLModel, Session, create_engine
 load_dotenv()
 
 # Database URL from environment or default
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5434/sqlmodel_db",
+DB_NAME = os.getenv(
+    "POSTGRES_DB",
+    "sqlmodel_db",
+)
+
+
+DB_USER = os.getenv(
+    "POSTGRES_USER",
+    "postgres",
+)
+
+DB_PASSWORD = os.getenv(
+    "POSTGRES_PASSWORD",
+    "postgres",
+)
+
+DB_HOST = os.getenv(
+    "DB_HOST",
+    "localhost",
+)
+
+DB_PORT = os.getenv(
+    "DB_PORT",
+    "5432",
 )
 
 # Create engine
-engine = create_engine(DATABASE_URL, echo=True)
+engine = create_engine(f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}", echo=True)
 
 
 def get_db() -> Generator[Session, None, None]:

@@ -2,30 +2,43 @@
 
 **Real-time CDC pipeline: PostgreSQL → Redpanda → Moose → ClickHouse**
 
-Stream changes from your OLTP database to OLAP analytics in real-time using Change Data Capture. Multiple ORM implementations (TypeORM and SQLModel) showing the same architecture!
+Stream changes from your OLTP database to OLAP analytics in real-time using Change Data Capture. Five ORM implementations showing the same architecture across TypeScript and Python ecosystems!
+
+## 🎯 New Developer? Start Here
+
+**This repository demonstrates Change Data Capture (CDC)** - the practice of streaming database changes to analytics systems in real-time. Instead of polling or batch ETL jobs, CDC captures every INSERT, UPDATE, and DELETE from PostgreSQL's transaction log and pipes it to ClickHouse for lightning-fast analytics.
+
+**Choose your path:**
+
+1. **Learn the concepts** → Read [How It Works](#how-it-works) below
+2. **Try it immediately** → Follow [Quick Start](#quick-start) (5 minutes)
+3. **Understand the design** → See [CDC Pipeline Design](apps/typeorm-example/docs/CDC_PIPELINE_DESIGN.md)
+4. **Test interactively** → Run the [Test Client](#test-the-pipeline) to see CDC in action
 
 ## What This Demonstrates
 
 A complete, working example of an OLTP-to-OLAP CDC pipeline with:
 
 - **Real-time Change Data Capture** from PostgreSQL transaction logs
-- **Automatic denormalization** for fast analytical queries
-- **Two production-ready implementations** (TypeORM and SQLModel)
-- **Interactive test client** to see CDC in action
-- **Star schema design** optimized for analytics
+- **Automatic denormalization** for fast analytical queries without JOINs
+- **Five ORM examples** showing the same architecture across different frameworks
+- **Interactive test client** with dynamic backend switching
+- **Star schema design** optimized for analytics workloads
+- **Interactive setup scripts** that teach CDC concepts as you configure
 
 ## Project Status
 
 **Production-Ready:**
-- **TypeORM Example** - TypeScript/Node.js with Express API (port 3000)
-- **SQLModel Example** - Python/FastAPI implementation (port 3002)
-  - Uses SQLModel (SQLAlchemy 2.0 + Pydantic) for unified database and validation models
-  - Directory named `sqlalchemy-example` for consistency, but implementation is SQLModel
-- **Test Client** - React UI for testing both backends
+- ✅ **TypeORM Example** - TypeScript/Node.js with Express API (port 3000)
+- ✅ **SQLModel Example** - Python/FastAPI implementation (port 3002)
+- ✅ **Test Client** - React UI with in-app backend switching
 
-**Work in Progress:**
-- **Drizzle Example** - WIP, not yet functional
-- **Prisma Example** - WIP, not yet functional
+**Experimental (Setup Available):**
+- ⚠️ **Drizzle Example** - Basic setup working (port 3003)
+- ⚠️ **Prisma Example** - Basic setup working (port 3004)
+- ⚠️ **Sequelize Example** - Basic setup working (port 3005)
+
+All five examples include interactive `setup.sh` scripts that guide you through CDC configuration step-by-step.
 
 ## Architecture
 
@@ -47,10 +60,37 @@ A complete, working example of an OLTP-to-OLAP CDC pipeline with:
 
 **Prerequisites:**
 - Docker and Docker Compose
-- Node.js 18+ (for TypeORM) or Python 3.10+ (for SQLModel)
+- Node.js 18+ (for TypeScript examples) or Python 3.10+ (for Python examples)
 - Redpanda Enterprise License - [Get a free 30-day trial](https://redpanda.com/try-enterprise)
 
-**New to this?** See the detailed [QUICKSTART.md](QUICKSTART.md) guide for step-by-step instructions.
+### 🚀 Recommended: Interactive Setup Script
+
+**The easiest way to get started** - each ORM example includes an interactive `setup.sh` script that teaches CDC concepts while configuring your environment:
+
+```bash
+# Choose any example (TypeORM recommended for beginners)
+cd apps/typeorm-example
+
+# Run interactive setup - it will guide you through:
+./setup.sh
+# 1. Starting PostgreSQL with CDC enabled
+# 2. Creating database tables
+# 3. Configuring logical replication
+# 4. Verifying CDC prerequisites
+
+# Or use convenient shortcuts
+make start              # Interactive setup
+make status             # Check what's running
+make logs-connector     # Debug CDC connector
+```
+
+**Why use setup.sh:**
+- 📚 **Educational** - Learn what CDC is and how it works as you set it up
+- ✅ **Debuggable** - Clear status checks and error messages at each step
+- 🔧 **Flexible** - Run all steps together or individual steps for troubleshooting
+- 📊 **Transparent** - See exactly what's happening under the hood
+
+**After running setup.sh**, start the remaining services and test the pipeline (see example-specific instructions below).
 
 ### TypeScript + TypeORM
 
@@ -60,7 +100,10 @@ cd apps/typeorm-example
 # Set Redpanda license
 export REDPANDA_LICENSE="your_license_key_here"
 
-# Terminal 1: Start infrastructure
+# Run interactive setup
+./setup.sh
+
+# Terminal 1: Start infrastructure (includes CDC connector)
 moose dev
 
 # Terminal 2: Start API
@@ -72,7 +115,7 @@ Visit http://localhost:3000 for API and http://localhost:3000/reference for docs
 ### Python + SQLModel
 
 ```bash
-cd apps/sqlalchemy-example  # Named for consistency, uses SQLModel
+cd apps/sqlmodel-example
 
 # Set Redpanda license
 export REDPANDA_LICENSE="your_license_key_here"
@@ -82,19 +125,20 @@ python -m venv venv
 source venv/bin/activate
 pip install -e .
 
-# Terminal 1: Start PostgreSQL
-./start-oltp.sh
+# Run interactive setup
+./setup.sh
 
-# Terminal 2: Start infrastructure
+# Terminal 1: Start infrastructure (includes CDC connector)
 moose dev
 
-# Terminal 3: Start API
+# Terminal 2: Start API
+source venv/bin/activate
 fastapi dev src/main.py --port 3002
 ```
 
 Visit http://localhost:3002/docs for interactive API documentation.
 
-**About SQLModel:** Created by FastAPI's author, SQLModel combines SQLAlchemy (database) and Pydantic (validation) into a single, type-safe model. See the [SQLModel guide](apps/sqlalchemy-example/docs/WHY_SQLMODEL.md) for details.
+**About SQLModel:** Created by FastAPI's author, SQLModel combines SQLAlchemy (database) and Pydantic (validation) into a single, type-safe model. One class definition serves as both database table and API validation schema.
 
 ### Test the Pipeline
 
@@ -105,42 +149,65 @@ pnpm install && pnpm dev
 
 Visit http://localhost:3001 to create data and watch CDC in action.
 
+**The test client features:**
+- 🔄 **Dynamic backend switching** - Switch between TypeORM, SQLModel, or other backends using the in-app Settings button
+- 🎯 **Auto-detection** - Automatically shows settings modal if it can't connect to the backend
+- 🎲 **Data generation** - Create random customers, products, and orders with one click
+- 📊 **Real-time CDC** - Watch changes flow from PostgreSQL to ClickHouse in under 1 second
+- ✏️ **Full CRUD** - Create, update, and delete records to test all CDC operations
+
+See the [Test Client README](apps/test-client/README.md) for complete usage instructions.
+
 ## Documentation
 
 ### Getting Started
-- [Quick Start Guide](QUICKSTART.md) - Get running in 5 minutes
-- [TypeORM Example](apps/typeorm-example/README.md) - TypeScript implementation
-- [SQLModel Example](apps/sqlalchemy-example/README.md) - Python implementation with SQLModel
-- [Test Client](apps/test-client/README.md) - Interactive UI for testing
+- [TypeORM Example](apps/typeorm-example/README.md) - TypeScript/Node.js implementation (recommended for beginners)
+- [SQLModel Example](apps/sqlmodel-example/README.md) - Python/FastAPI implementation
+- [Test Client](apps/test-client/README.md) - Interactive UI for testing with backend switching
+- [Drizzle Example](apps/drizzle-example/README.md) - Experimental Drizzle ORM implementation
+- [Prisma Example](apps/prisma-example/README.md) - Experimental Prisma ORM implementation
+- [Sequelize Example](apps/sequelize-example/README.md) - Experimental Sequelize ORM implementation
 
 ### Architecture & Design
-- [CDC Pipeline Design](apps/typeorm-example/docs/CDC_PIPELINE_DESIGN.md) - How CDC works
-- [OLAP Conversion Guide](apps/typeorm-example/docs/OLAP_CONVERSION_GUIDE.md) - ORM to analytics patterns
-- [TypeORM Setup Guide](apps/typeorm-example/docs/SETUP_GUIDE.md) - Detailed setup with troubleshooting
+- [CDC Pipeline Design](apps/typeorm-example/docs/CDC_PIPELINE_DESIGN.md) - Deep dive into how CDC works
+- [OLAP Conversion Guide](apps/typeorm-example/docs/OLAP_CONVERSION_GUIDE.md) - Patterns for converting ORM models to analytics tables
+- [TypeORM Setup Guide](apps/typeorm-example/docs/SETUP_GUIDE.md) - Detailed setup with troubleshooting tips
 
 ## Project Structure
 
 ```
 oltp-to-olap-showcase/
 ├── apps/
-│   ├── typeorm-example/       # TypeScript/Node.js implementation
+│   ├── typeorm-example/       # ✅ TypeScript/Node.js (port 3000)
 │   │   ├── src/               # TypeORM entities & Express API
-│   │   ├── app/               # Moose OLAP tables
-│   │   └── docs/              # Architecture guides
+│   │   ├── app/               # Moose OLAP tables & transformations
+│   │   ├── docs/              # Architecture guides
+│   │   └── setup.sh           # Interactive CDC setup script
 │   │
-│   ├── sqlalchemy-example/    # Python/FastAPI implementation (uses SQLModel)
+│   ├── sqlmodel-example/      # ✅ Python/FastAPI (port 3002)
 │   │   ├── src/               # SQLModel models & FastAPI
-│   │   └── app/               # Moose OLAP tables
+│   │   ├── app/               # Moose OLAP tables & transformations
+│   │   └── setup.sh           # Interactive CDC setup script
 │   │
-│   ├── test-client/           # React test UI
+│   ├── drizzle-example/       # ⚠️ Experimental (port 3003)
+│   │   └── setup.sh           # Interactive CDC setup script
 │   │
-│   ├── drizzle-example/       # WIP - Not functional
-│   ├── prisma-example/        # WIP - Not functional
-│   └── sequelize-example/     # WIP - Not functional
+│   ├── prisma-example/        # ⚠️ Experimental (port 3004)
+│   │   └── setup.sh           # Interactive CDC setup script
+│   │
+│   ├── sequelize-example/     # ⚠️ Experimental (port 3005)
+│   │   └── setup.sh           # Interactive CDC setup script
+│   │
+│   └── test-client/           # ✅ React UI (port 3001)
+│       ├── src/
+│       │   ├── components/    # Settings modal for backend switching
+│       │   └── contexts/      # API context for dynamic URL management
+│       └── README.md          # Test client documentation
 │
-├── QUICKSTART.md
-└── README.md
+└── README.md                  # This file
 ```
+
+**All five ORM examples** include interactive `setup.sh` scripts that guide you through CDC configuration.
 
 ## How It Works
 
@@ -236,26 +303,27 @@ ORDER BY revenue DESC;
 
 **Shared Infrastructure:**
 - PostgreSQL 15 with logical replication
-- Redpanda Connect (CDC connector)
-- Redpanda (Kafka-compatible streaming)
-- Moose (stream processing)
+- Redpanda Connect (CDC connector for capturing WAL changes)
+- Redpanda (Kafka-compatible streaming platform)
+- Moose (stream processing and transformations)
 - ClickHouse (columnar analytics database)
 
-**TypeORM Example:**
-- TypeScript + Node.js
-- TypeORM 0.3
-- Express + Scalar OpenAPI docs
+**ORM Examples:**
 
-**SQLModel Example:**
-- Python 3.10+
-- **SQLModel** (combines SQLAlchemy 2.0 + Pydantic v2)
-- FastAPI (by same creator as SQLModel)
-- Single model = database table + API validation
+| Example | Language | ORM | API Framework | Port |
+|---------|----------|-----|---------------|------|
+| TypeORM | TypeScript | TypeORM 0.3 | Express + Scalar | 3000 |
+| SQLModel | Python | SQLModel (SQLAlchemy 2.0 + Pydantic) | FastAPI | 3002 |
+| Drizzle | TypeScript | Drizzle | Express | 3003 |
+| Prisma | TypeScript | Prisma | Express | 3004 |
+| Sequelize | TypeScript | Sequelize | Express | 3005 |
 
 **Test Client:**
-- React 18 + Vite
-- shadcn/ui components
-- Tailwind CSS
+- React 18 + TypeScript + Vite
+- shadcn/ui components (Dialog, Button, etc.)
+- Tailwind CSS for styling
+- React Query for data fetching
+- Dynamic backend switching via settings UI
 
 ## Key Concepts
 
@@ -273,16 +341,23 @@ Changes appear in ClickHouse within milliseconds, enabling live dashboards and u
 
 ## Contributing
 
-Contributions are welcome! This is a demonstration project showing CDC patterns with different ORMs.
+Contributions are welcome! This is an educational project demonstrating CDC patterns across multiple ORMs.
 
 **Areas for contribution:**
-- Bug fixes and improvements
-- Documentation enhancements
-- New ORM examples (help finish Drizzle, Prisma, or Sequelize)
-- Performance optimizations
-- Additional test scenarios
+- 🐛 **Bug fixes** - Improvements to existing TypeORM and SQLModel examples
+- 📚 **Documentation** - Clarify setup instructions, add troubleshooting tips
+- 🔧 **Experimental ORMs** - Help stabilize Drizzle, Prisma, and Sequelize examples
+- ⚡ **Performance** - Optimize transformations and data flow
+- 🧪 **Test scenarios** - Add new features to test client (filters, charts, etc.)
+- 🎨 **UI improvements** - Enhance test client user experience
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+**Why contribute?**
+- Learn CDC patterns hands-on
+- See how different ORMs handle the same architecture
+- Build portfolio-worthy work with real-world data engineering
+- Help others learn from your improvements
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 ## Learn More
 
@@ -305,7 +380,17 @@ MIT
 
 ---
 
-**Ready to get started?**
-1. [Quick Start Guide](QUICKSTART.md) - 5-minute setup
-2. Choose your stack: [TypeORM](apps/typeorm-example/README.md) or [SQLModel](apps/sqlalchemy-example/README.md)
-3. Run the [Test Client](apps/test-client/README.md) to see CDC in action
+## Ready to Get Started?
+
+**Three ways to explore this project:**
+
+1. **Quick Test** - Follow [Quick Start](#quick-start) above for a 5-minute setup
+2. **Deep Dive** - Read [CDC Pipeline Design](apps/typeorm-example/docs/CDC_PIPELINE_DESIGN.md) to understand the architecture
+3. **Interactive Learning** - Run `./setup.sh` in any example directory for guided CDC configuration
+
+**Choose your ORM:**
+- [TypeORM](apps/typeorm-example/README.md) - TypeScript/Node.js (recommended for beginners)
+- [SQLModel](apps/sqlmodel-example/README.md) - Python/FastAPI
+- [Drizzle](apps/drizzle-example/README.md), [Prisma](apps/prisma-example/README.md), [Sequelize](apps/sequelize-example/README.md) - Experimental
+
+**Then test with:** [Test Client](apps/test-client/README.md) - Interactive UI to see CDC in real-time

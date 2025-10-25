@@ -29,22 +29,15 @@ services:
   #
   redpanda-connect:
     image: docker.redpanda.com/redpandadata/connect:latest
-    container_name: redpanda-connect
+    container_name: drizzle-redpanda-connect
     volumes:
       - ../redpanda-connect.yaml:/connect.yaml:ro
     command: ["run", "/connect.yaml"]
     ports:
-      - "4195:4195" # HTTP API for health checks and metrics
+      - "4197:4195" # HTTP API for health checks and metrics
     environment:
       REDPANDA_LICENSE: ${REDPANDA_LICENSE:-}
-      POSTGRES_CDC_DSN: "postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@${APP_NAME:-sqlmodel}-postgres:5432/${POSTGRES_DB:-sqlmodel_db}?sslmode=disable"
       LOG_LEVEL: "info"
     networks:
-      - default
-      - shared # Connect to shared network with PostgreSQL
+      - default # Connect to Moose Redpanda and PostgreSQL
     restart: unless-stopped
-
-networks:
-  shared:
-    name: ${APP_NAME:-sqlmodel}-shared-network
-    external: true

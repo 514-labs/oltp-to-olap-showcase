@@ -53,10 +53,62 @@ Verify: http://localhost:3002/docs
 ```bash
 cd apps/test-client
 pnpm install
+
+# Configure which backend to connect to (optional)
+cp .env.example .env
+# Edit .env and set VITE_API_URL to your backend's URL
+
 pnpm dev
 ```
 
 Visit http://localhost:3001
+
+### Backend Configuration
+
+The test client can connect to any backend API. You have three ways to configure it:
+
+**Option 1: In-App Settings (Easiest)** ⭐
+1. Click the **Settings** button in the top-right corner
+2. Select a preset backend (TypeORM, SQLModel, etc.) or enter a custom URL
+3. Click **Save & Reconnect**
+
+The app will automatically reconnect and reload data. Settings are saved in your browser.
+
+**Option 2: Using .env file**
+```bash
+# Copy example and edit
+cp .env.example .env
+
+# For TypeORM backend
+echo "VITE_API_URL=http://localhost:3000" > .env
+
+# For SQLModel backend
+echo "VITE_API_URL=http://localhost:3002" > .env
+
+# Optional: Configure custom ports for Settings modal presets
+echo "VITE_TYPEORM_PORT=8080" >> .env
+# This makes the TypeORM preset in Settings show port 8080
+```
+
+**Option 3: Inline with dev command**
+```bash
+# TypeORM backend
+VITE_API_URL=http://localhost:3000 pnpm dev
+
+# SQLModel backend
+VITE_API_URL=http://localhost:3002 pnpm dev
+```
+
+**Default:** If not configured, defaults to `http://localhost:3002` (SQLModel backend)
+
+### Auto-Detection of Connection Issues
+
+If the test client can't connect to the backend, it will automatically show the settings modal. This happens when:
+- The backend server is not running
+- The wrong port is configured
+- CORS issues prevent the connection
+
+Just click "Save & Reconnect" to retry with the correct URL.
 
 ## Using the Test Client
 
@@ -160,16 +212,31 @@ This is real-time analytics - not instantaneous, but fast enough for live dashbo
 
 ### "Cannot connect to API"
 
-**Check backend is running:**
+The settings modal should appear automatically when there's a connection error. If not:
+
+**1. Open Settings manually:**
+Click the "Settings" button in the top-right corner and verify the API URL is correct.
+
+**2. Verify backend is running on the correct port:**
 ```bash
-# TypeORM
+# TypeORM (default port 3000)
 curl http://localhost:3000/health
 
-# SQLAlchemy
+# SQLModel (default port 3002)
 curl http://localhost:3002/health
 ```
 
-**Check PostgreSQL:**
+**3. Check the browser console:**
+Look for messages like `[API] Initialized with URL: http://localhost:3002` to see which URL is being used.
+
+**4. Clear browser storage if needed:**
+```javascript
+// In browser console
+localStorage.removeItem('test_client_api_url')
+// Then refresh the page
+```
+
+**5. Check PostgreSQL is running:**
 ```bash
 docker ps | grep postgres
 ```

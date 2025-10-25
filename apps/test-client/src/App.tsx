@@ -14,7 +14,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Toaster } from '@/components/ui/toaster';
 import { customersApi, productsApi, ordersApi, orderItemsApi } from '@/lib/api';
 import type { Customer, Product, Order } from '@/lib/types';
-import { Trash2, Edit, Plus, X } from 'lucide-react';
+import { Trash2, Edit, Plus, X, Settings } from 'lucide-react';
+import { useApi } from '@/contexts/ApiContext';
 
 function App() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -23,11 +24,12 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const { toast } = useToast();
+  const { apiUrl, showSettingsModal } = useApi();
 
-  // Load data on mount
+  // Load data on mount and when API URL changes
   useEffect(() => {
     loadData();
-  }, []);
+  }, [apiUrl]);
 
   const loadData = async () => {
     try {
@@ -238,11 +240,25 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-7xl mx-auto space-y-8">
-        <div className="space-y-2">
-          <h1 className="text-4xl font-bold">OLTP Test Client</h1>
-          <p className="text-gray-600">
-            Test CDC pipeline by creating, modifying, and deleting orders
-          </p>
+        <div className="flex justify-between items-start">
+          <div className="space-y-2">
+            <h1 className="text-4xl font-bold">OLTP Test Client</h1>
+            <p className="text-gray-600">
+              Test CDC pipeline by creating, modifying, and deleting orders
+            </p>
+            <p className="text-xs text-gray-500 font-mono">
+              Connected to: {apiUrl}
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => showSettingsModal(false)}
+            className="flex items-center gap-2"
+          >
+            <Settings className="h-4 w-4" />
+            Settings
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -1,0 +1,595 @@
+#!/bin/bash
+
+# Template Setup Script for OLTP + CDC
+# Replace {{PROJECT_NAME}}, {{DB_NAME}}, {{PORT}}, {{TABLE_NAMES}} when copying
+
+set -e
+
+# Configuration - REPLACE THESE VALUES
+PROJECT_NAME="{{PROJECT_NAME}}"
+DB_NAME="{{DB_NAME}}"
+POSTGRES_PORT="{{PORT}}"
+CONTAINER_NAME="${PROJECT_NAME}-oltp-postgres"
+CONNECTOR_CONTAINER="${PROJECT_NAME}-redpanda-connect"
+NETWORK_NAME="${PROJECT_NAME}-network"
+
+# Table names to check for - REPLACE WITH YOUR TABLES
+TABLE_NAMES=("customers" "products" "orders" "order_items")
+
+# Colors and formatting
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+BOLD='\033[1m'
+
+# Emoji for better UX
+CHECK="✅"
+CROSS="❌"
+INFO="ℹ️ "
+WAIT="⏳"
+ROCKET="🚀"
+WRENCH="🔧"
+DATABASE="🗄️ "
+CHART="📊"
+RADIO="📡"
+SPARKLE="✨"
+PARTY="🎉"
+
+# Helper functions
+print_header() {
+    echo ""
+    echo -e "${BOLD}${CYAN}╔══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BOLD}${CYAN}║${NC}  $1"
+    echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+}
+
+print_step() {
+    echo ""
+    echo -e "${BOLD}${BLUE}────────────────────────────────────────────────────────────${NC}"
+    echo -e "${BOLD}$1${NC}"
+    echo -e "${BOLD}${BLUE}────────────────────────────────────────────────────────────${NC}"
+    echo ""
+}
+
+print_info() {
+    echo -e "${INFO} ${CYAN}$1${NC}"
+}
+
+print_success() {
+    echo -e "${CHECK} ${GREEN}$1${NC}"
+}
+
+print_error() {
+    echo -e "${CROSS} ${RED}$1${NC}"
+}
+
+print_warning() {
+    echo -e "${YELLOW}⚠️  $1${NC}"
+}
+
+print_waiting() {
+    echo -e "${WAIT} $1"
+}
+
+# Check if Docker is running
+check_docker() {
+    if ! docker info > /dev/null 2>&1; then
+        print_error "Docker is not running"
+        echo ""
+        echo "Please start Docker Desktop and try again."
+        exit 1
+    fi
+}
+
+# Start PostgreSQL
+start_db() {
+    print_step "Step 1: Starting PostgreSQL ${DATABASE}"
+
+    print_info "What this does:"
+    echo "   Starts a PostgreSQL 15 database configured for"
+    echo "   logical replication (required for CDC)."
+    echo ""
+    echo "   Port: ${POSTGRES_PORT}"
+    echo "   Database: ${DB_NAME}"
+    echo "   User: postgres"
+    echo ""
+
+    if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+        print_success "PostgreSQL is already running!"
+        return 0
+    fi
+
+    print_info "Running: docker compose -f docker-compose.oltp.yaml up -d"
+    echo ""
+
+    docker compose -f docker-compose.oltp.yaml up -d
+
+    print_success "Container started!"
+    print_waiting "Waiting for PostgreSQL to be ready..."
+
+    # Wait for PostgreSQL to be ready
+    local max_attempts=30
+    local attempt=0
+
+    while [ $attempt -lt $max_attempts ]; do
+        if docker exec "$CONTAINER_NAME" pg_isready -U postgres > /dev/null 2>&1; then
+            print_success "PostgreSQL is ready and accepting connections!"
+            return 0
+        fi
+        attempt=$((attempt + 1))
+        sleep 1
+        echo -n "."
+    done
+
+    echo ""
+    print_error "PostgreSQL did not become ready in time"
+    echo ""
+    echo "Troubleshooting:"
+    echo "  1. Check logs: docker logs ${CONTAINER_NAME}"
+    echo "  2. Check if port ${POSTGRES_PORT} is available"
+    echo "  3. Try: ./setup.sh restart"
+    exit 1
+}
+
+# Wait for tables to exist
+wait_for_tables() {
+    print_step "Step 2: Waiting for Tables ${CHART}"
+
+    print_info "What this does:"
+    echo "   Your application needs to create tables in the"
+    echo "   database before we can set up CDC."
+    echo ""
+    echo "   Required tables: ${TABLE_NAMES[*]}"
+    echo ""
+
+    # Check if tables already exist
+    local all_exist=true
+    for table in "${TABLE_NAMES[@]}"; do
+        if ! docker exec "$CONTAINER_NAME" psql -U postgres -d "$DB_NAME" -tAc \
+            "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='$table'" \
+            2>/dev/null | grep -q 1; then
+            all_exist=false
+            break
+        fi
+    done
+
+    if [ "$all_exist" = true ]; then
+        print_success "All tables already exist!"
+        return 0
+    fi
+
+    print_info "Please run your application now to create tables:"
+    echo "   ${BOLD}$ npm run dev${NC}     or     ${BOLD}$ npm run migrate${NC}"
+    echo ""
+    echo "Press Enter when tables are created (or 's' to skip)..."
+
+    # Wait for tables with timeout
+    local timeout=300  # 5 minutes
+    local elapsed=0
+
+    while [ $elapsed -lt $timeout ]; do
+        # Check for user input (non-blocking)
+        read -t 5 -n 1 input || true
+
+        if [ "$input" = "s" ] || [ "$input" = "S" ]; then
+            print_warning "Skipping table check..."
+            return 0
+        fi
+
+        # Check if all tables exist
+        all_exist=true
+        for table in "${TABLE_NAMES[@]}"; do
+            if ! docker exec "$CONTAINER_NAME" psql -U postgres -d "$DB_NAME" -tAc \
+                "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='$table'" \
+                2>/dev/null | grep -q 1; then
+                all_exist=false
+                break
+            fi
+        done
+
+        if [ "$all_exist" = true ]; then
+            echo ""
+            print_success "All tables found!"
+            return 0
+        fi
+
+        elapsed=$((elapsed + 5))
+        if [ $((elapsed % 10)) -eq 0 ]; then
+            print_waiting "Still waiting... (${elapsed}s elapsed)"
+        fi
+    done
+
+    echo ""
+    print_error "Tables not found after ${timeout} seconds"
+    echo ""
+    echo "Make sure your application is running and creating tables."
+    echo "You can skip this check with 's' if tables already exist."
+    exit 1
+}
+
+# Setup CDC
+setup_cdc() {
+    print_step "Step 3: Configure CDC ${WRENCH}"
+
+    print_info "What this does:"
+    echo "   Sets up PostgreSQL for Change Data Capture (CDC):"
+    echo ""
+    echo "   1. ${BOLD}Publication${NC}: Tells Postgres which tables to track"
+    echo "   2. ${BOLD}Replication Slot${NC}: Buffer for change events"
+    echo ""
+    echo "   This allows Redpanda Connect to stream database"
+    echo "   changes in real-time without impacting your app."
+    echo ""
+
+    # Check if already configured
+    if docker exec "$CONTAINER_NAME" psql -U postgres -d "$DB_NAME" -tAc \
+        "SELECT 1 FROM pg_publication WHERE pubname='redpanda_cdc_publication'" \
+        2>/dev/null | grep -q 1; then
+        print_success "CDC publication already exists!"
+    else
+        print_info "Creating CDC publication..."
+
+        if [ -f "scripts/create-publication.sql" ]; then
+            docker exec -i "$CONTAINER_NAME" psql -U postgres -d "$DB_NAME" < scripts/create-publication.sql
+        else
+            # Fallback if script doesn't exist
+            docker exec "$CONTAINER_NAME" psql -U postgres -d "$DB_NAME" <<-EOSQL
+                CREATE PUBLICATION redpanda_cdc_publication FOR ALL TABLES;
+EOSQL
+        fi
+
+        print_success "Publication created!"
+    fi
+
+    # Check if replication slot exists
+    if docker exec "$CONTAINER_NAME" psql -U postgres -d "$DB_NAME" -tAc \
+        "SELECT 1 FROM pg_replication_slots WHERE slot_name='redpanda_cdc_slot'" \
+        2>/dev/null | grep -q 1; then
+        print_success "Replication slot already exists!"
+    else
+        print_info "Creating replication slot..."
+
+        docker exec "$CONTAINER_NAME" psql -U postgres -d "$DB_NAME" <<-EOSQL
+            SELECT pg_create_logical_replication_slot('redpanda_cdc_slot', 'pgoutput');
+EOSQL
+
+        print_success "Replication slot created!"
+    fi
+
+    echo ""
+    print_success "CDC configuration complete!"
+}
+
+# Start Redpanda Connect
+start_connector() {
+    print_step "Step 4: Start CDC Connector ${RADIO}"
+
+    print_info "What this does:"
+    echo "   Starts Redpanda Connect, which reads from the"
+    echo "   replication slot and sends changes to Kafka topics."
+    echo ""
+
+    if docker ps --format '{{.Names}}' | grep -q "^${CONNECTOR_CONTAINER}$"; then
+        print_success "Redpanda Connect is already running!"
+        return 0
+    fi
+
+    print_info "Running: docker compose -f docker-compose.dev.override.yaml up -d"
+    echo ""
+
+    # Start just the redpanda-connect service
+    docker compose -f docker-compose.oltp.yaml -f docker-compose.dev.override.yaml up -d redpanda-connect
+
+    print_success "Connector started!"
+    print_waiting "Waiting for connector to connect to database..."
+
+    sleep 3
+
+    if docker ps --format '{{.Names}}' | grep -q "^${CONNECTOR_CONTAINER}$"; then
+        print_success "Redpanda Connect is running!"
+    else
+        print_error "Connector failed to start"
+        echo ""
+        echo "Check logs: docker logs ${CONNECTOR_CONTAINER}"
+        exit 1
+    fi
+}
+
+# Verify everything
+verify_all() {
+    print_step "Step 5: Verify Everything ${SPARKLE}"
+
+    local all_good=true
+
+    # Check PostgreSQL
+    if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+        print_success "PostgreSQL: Running"
+    else
+        print_error "PostgreSQL: Not running"
+        all_good=false
+    fi
+
+    # Check tables
+    local table_count=0
+    for table in "${TABLE_NAMES[@]}"; do
+        if docker exec "$CONTAINER_NAME" psql -U postgres -d "$DB_NAME" -tAc \
+            "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='$table'" \
+            2>/dev/null | grep -q 1; then
+            table_count=$((table_count + 1))
+        fi
+    done
+
+    if [ $table_count -eq ${#TABLE_NAMES[@]} ]; then
+        print_success "Tables: All ${table_count} tables found"
+    else
+        print_warning "Tables: Only ${table_count}/${#TABLE_NAMES[@]} tables found"
+        all_good=false
+    fi
+
+    # Check CDC publication
+    if docker exec "$CONTAINER_NAME" psql -U postgres -d "$DB_NAME" -tAc \
+        "SELECT 1 FROM pg_publication WHERE pubname='redpanda_cdc_publication'" \
+        2>/dev/null | grep -q 1; then
+        print_success "CDC Publication: Configured"
+    else
+        print_error "CDC Publication: Not found"
+        all_good=false
+    fi
+
+    # Check replication slot
+    if docker exec "$CONTAINER_NAME" psql -U postgres -d "$DB_NAME" -tAc \
+        "SELECT 1 FROM pg_replication_slots WHERE slot_name='redpanda_cdc_slot'" \
+        2>/dev/null | grep -q 1; then
+        print_success "Replication Slot: Active"
+    else
+        print_error "Replication Slot: Not found"
+        all_good=false
+    fi
+
+    # Check Redpanda Connect
+    if docker ps --format '{{.Names}}' | grep -q "^${CONNECTOR_CONTAINER}$"; then
+        print_success "Redpanda Connect: Running"
+    else
+        print_error "Redpanda Connect: Not running"
+        all_good=false
+    fi
+
+    echo ""
+
+    if [ "$all_good" = true ]; then
+        print_success "${PARTY} Setup complete! All systems operational!"
+        echo ""
+        echo "Next steps:"
+        echo "  • Make changes to your database"
+        echo "  • Check CDC events: docker logs ${CONNECTOR_CONTAINER}"
+        echo "  • View status anytime: ./setup.sh status"
+        echo ""
+    else
+        print_warning "Some components are not properly configured"
+        echo ""
+        echo "Run './setup.sh troubleshoot' for help"
+        exit 1
+    fi
+}
+
+# Show status
+show_status() {
+    print_header "${PROJECT_NAME} CDC Setup Status"
+
+    # PostgreSQL status
+    if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+        print_success "PostgreSQL: Running (port ${POSTGRES_PORT})"
+        echo "   └─ Container: ${CONTAINER_NAME}"
+        echo "   └─ Database: ${DB_NAME}"
+        if docker exec "$CONTAINER_NAME" pg_isready -U postgres > /dev/null 2>&1; then
+            echo "   └─ Health: ${GREEN}Healthy${NC}"
+        else
+            echo "   └─ Health: ${RED}Unhealthy${NC}"
+        fi
+    else
+        print_error "PostgreSQL: Not running"
+        echo "   └─ Start with: ./setup.sh start-db"
+    fi
+
+    echo ""
+
+    # Tables status
+    local table_count=0
+    for table in "${TABLE_NAMES[@]}"; do
+        if docker exec "$CONTAINER_NAME" psql -U postgres -d "$DB_NAME" -tAc \
+            "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='$table'" \
+            2>/dev/null | grep -q 1; then
+            table_count=$((table_count + 1))
+        fi
+    done
+
+    if [ $table_count -gt 0 ]; then
+        print_success "Tables: ${table_count} tables found"
+        echo "   └─ ${TABLE_NAMES[*]}"
+    else
+        print_warning "Tables: No tables found"
+        echo "   └─ Run your app to create tables"
+    fi
+
+    echo ""
+
+    # CDC status
+    if docker exec "$CONTAINER_NAME" psql -U postgres -d "$DB_NAME" -tAc \
+        "SELECT 1 FROM pg_publication WHERE pubname='redpanda_cdc_publication'" \
+        2>/dev/null | grep -q 1; then
+        print_success "CDC Publication: Configured"
+
+        local pub_tables=$(docker exec "$CONTAINER_NAME" psql -U postgres -d "$DB_NAME" -tAc \
+            "SELECT COUNT(*) FROM pg_publication_tables WHERE pubname='redpanda_cdc_publication'" 2>/dev/null || echo "0")
+        echo "   └─ Name: redpanda_cdc_publication"
+        echo "   └─ Tables: ${pub_tables} tables"
+    else
+        print_warning "CDC Publication: Not configured"
+        echo "   └─ Setup with: ./setup.sh setup-cdc"
+    fi
+
+    echo ""
+
+    if docker exec "$CONTAINER_NAME" psql -U postgres -d "$DB_NAME" -tAc \
+        "SELECT 1 FROM pg_replication_slots WHERE slot_name='redpanda_cdc_slot'" \
+        2>/dev/null | grep -q 1; then
+        print_success "Replication Slot: Active"
+        echo "   └─ Name: redpanda_cdc_slot"
+        echo "   └─ Type: logical"
+    else
+        print_warning "Replication Slot: Not found"
+        echo "   └─ Setup with: ./setup.sh setup-cdc"
+    fi
+
+    echo ""
+
+    # Redpanda Connect status
+    if docker ps --format '{{.Names}}' | grep -q "^${CONNECTOR_CONTAINER}$"; then
+        print_success "Redpanda Connect: Running"
+        echo "   └─ Container: ${CONNECTOR_CONTAINER}"
+        echo "   └─ Logs: docker logs ${CONNECTOR_CONTAINER}"
+    else
+        print_warning "Redpanda Connect: Not running"
+        echo "   └─ Start with: ./setup.sh start-connector"
+    fi
+
+    echo ""
+}
+
+# Stop all services
+stop_all() {
+    print_info "Stopping all services..."
+    docker compose -f docker-compose.oltp.yaml down
+    docker compose -f docker-compose.dev.override.yaml down 2>/dev/null || true
+    print_success "All services stopped"
+}
+
+# Clean up
+cleanup() {
+    print_warning "This will remove all containers and volumes"
+    read -p "Are you sure? (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        print_info "Cleaning up..."
+        docker compose -f docker-compose.oltp.yaml down -v
+        docker compose -f docker-compose.dev.override.yaml down -v 2>/dev/null || true
+        print_success "Cleanup complete"
+    else
+        print_info "Cleanup cancelled"
+    fi
+}
+
+# Show help
+show_help() {
+    cat << EOF
+Usage: ./setup.sh [command]
+
+Commands:
+  (no args)        Interactive setup - walk through all steps
+  all              Run all steps automatically
+
+  start-db         Start PostgreSQL database
+  setup-cdc        Configure CDC (publication + replication slot)
+  start-connector  Start Redpanda Connect
+
+  status           Show status of all components
+  verify           Verify all components are working
+
+  logs             Show logs from all services
+  logs-db          Show PostgreSQL logs
+  logs-connector   Show Redpanda Connect logs
+
+  stop             Stop all services
+  restart          Restart all services
+  clean            Remove all containers and volumes
+
+  help             Show this help message
+
+Examples:
+  ./setup.sh                   # Interactive mode
+  ./setup.sh all              # Run all steps
+  ./setup.sh status           # Check status
+  ./setup.sh logs-connector   # View connector logs
+
+EOF
+}
+
+# Main execution
+main() {
+    check_docker
+
+    case "${1:-interactive}" in
+        interactive)
+            print_header "${PROJECT_NAME} OLTP + CDC Setup"
+            echo "This script will set up your database with CDC support."
+            echo ""
+            echo "Press Enter to continue, or Ctrl+C to cancel..."
+            read
+
+            start_db
+            wait_for_tables
+            setup_cdc
+            start_connector
+            verify_all
+            ;;
+        all)
+            start_db
+            sleep 2
+            setup_cdc
+            start_connector
+            verify_all
+            ;;
+        start-db)
+            start_db
+            ;;
+        setup-cdc)
+            setup_cdc
+            ;;
+        start-connector)
+            start_connector
+            ;;
+        status)
+            show_status
+            ;;
+        verify)
+            verify_all
+            ;;
+        logs)
+            docker compose -f docker-compose.oltp.yaml logs -f
+            ;;
+        logs-db)
+            docker logs -f "$CONTAINER_NAME"
+            ;;
+        logs-connector)
+            docker logs -f "$CONNECTOR_CONTAINER"
+            ;;
+        stop)
+            stop_all
+            ;;
+        restart)
+            stop_all
+            sleep 2
+            start_db
+            setup_cdc
+            start_connector
+            ;;
+        clean)
+            cleanup
+            ;;
+        help)
+            show_help
+            ;;
+        *)
+            print_error "Unknown command: $1"
+            echo ""
+            show_help
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"

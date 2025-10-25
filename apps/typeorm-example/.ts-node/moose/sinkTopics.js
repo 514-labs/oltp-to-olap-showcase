@@ -42,31 +42,32 @@ const __typia_transform__accessExpressionAsString = __importStar(require("typia/
 const typia_1 = __importDefault(require("typia"));
 const moose_lib_1 = require("@514labs/moose-lib");
 const sinkTables_1 = require("./sinkTables");
-exports.UnknownEventDeadLetterTopic = new moose_lib_1.DeadLetterQueue('unknown_event_dead_letter', {}, (() => { const _io0 = input => "object" === typeof input._metadata && null !== input._metadata && _io1(input._metadata) && Object.keys(input).every(key => {
-    if (["_metadata"].some(prop => key === prop))
-        return true;
+exports.UnknownEventDeadLetterTopic = new moose_lib_1.DeadLetterQueue('unknown_event_dead_letter', {}, (() => { const _io0 = input => "object" === typeof input.metadata && null !== input.metadata && _io1(input.metadata) && ("object" === typeof input.payload && null !== input.payload && false === Array.isArray(input.payload) && _io2(input.payload)); const _io1 = input => "string" === typeof input.table && ("delete" === input.operation || "insert" === input.operation || "update" === input.operation || "read" === input.operation) && "string" === typeof input.lsn; const _io2 = input => Object.keys(input).every(key => {
     const value = input[key];
     if (undefined === value)
         return true;
     return true;
-}); const _io1 = input => "string" === typeof input.table && ("delete" === input.operation || "insert" === input.operation || "update" === input.operation || "read" === input.operation) && "string" === typeof input.lsn; const _ao0 = (input, _path, _exceptionable = true) => (("object" === typeof input._metadata && null !== input._metadata || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+}); const _ao0 = (input, _path, _exceptionable = true) => (("object" === typeof input.metadata && null !== input.metadata || __typia_transform__assertGuard._assertGuard(_exceptionable, {
     method: "____moose____typia.createAssert",
-    path: _path + "._metadata",
-    expected: "__type",
-    value: input._metadata
-}, _errorFactory)) && _ao1(input._metadata, _path + "._metadata", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+    path: _path + ".metadata",
+    expected: "__type.o1",
+    value: input.metadata
+}, _errorFactory)) && _ao1(input.metadata, _path + ".metadata", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
     method: "____moose____typia.createAssert",
-    path: _path + "._metadata",
-    expected: "__type",
-    value: input._metadata
-}, _errorFactory)) && (false === _exceptionable || Object.keys(input).every(key => {
-    if (["_metadata"].some(prop => key === prop))
-        return true;
-    const value = input[key];
-    if (undefined === value)
-        return true;
-    return true;
-})); const _ao1 = (input, _path, _exceptionable = true) => ("string" === typeof input.table || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+    path: _path + ".metadata",
+    expected: "__type.o1",
+    value: input.metadata
+}, _errorFactory)) && (("object" === typeof input.payload && null !== input.payload && false === Array.isArray(input.payload) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+    method: "____moose____typia.createAssert",
+    path: _path + ".payload",
+    expected: "Record<string, any>",
+    value: input.payload
+}, _errorFactory)) && _ao2(input.payload, _path + ".payload", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+    method: "____moose____typia.createAssert",
+    path: _path + ".payload",
+    expected: "Record<string, any>",
+    value: input.payload
+}, _errorFactory)); const _ao1 = (input, _path, _exceptionable = true) => ("string" === typeof input.table || __typia_transform__assertGuard._assertGuard(_exceptionable, {
     method: "____moose____typia.createAssert",
     path: _path + ".table",
     expected: "string",
@@ -81,18 +82,23 @@ exports.UnknownEventDeadLetterTopic = new moose_lib_1.DeadLetterQueue('unknown_e
     path: _path + ".lsn",
     expected: "string",
     value: input.lsn
-}, _errorFactory)); const __is = input => "object" === typeof input && null !== input && _io0(input); let _errorFactory; return (input, errorFactory) => {
+}, _errorFactory)); const _ao2 = (input, _path, _exceptionable = true) => false === _exceptionable || Object.keys(input).every(key => {
+    const value = input[key];
+    if (undefined === value)
+        return true;
+    return true;
+}); const __is = input => "object" === typeof input && null !== input && _io0(input); let _errorFactory; return (input, errorFactory) => {
     if (false === __is(input)) {
         _errorFactory = errorFactory;
         ((input, _path, _exceptionable = true) => ("object" === typeof input && null !== input || __typia_transform__assertGuard._assertGuard(true, {
             method: "____moose____typia.createAssert",
             path: _path + "",
-            expected: "UnknownEvent",
+            expected: "__type",
             value: input
         }, _errorFactory)) && _ao0(input, _path + "", true) || __typia_transform__assertGuard._assertGuard(true, {
             method: "____moose____typia.createAssert",
             path: _path + "",
-            expected: "UnknownEvent",
+            expected: "__type",
             value: input
         }, _errorFactory))(input, "$input", true);
     }

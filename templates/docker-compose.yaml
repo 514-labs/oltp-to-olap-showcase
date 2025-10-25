@@ -1,0 +1,65 @@
+# Docker Compose for {{PROJECT_NAME}}
+# Simplified version - CDC setup is done via setup.sh script
+# Replace: {{PROJECT_NAME}}, {{DB_NAME}}, {{PORT}}, {{NETWORK_NAME}}
+
+services:
+  # PostgreSQL Database with CDC support
+  postgres:
+    image: postgres:15-alpine
+    container_name: {{PROJECT_NAME}}-oltp-postgres
+    environment:
+      POSTGRES_DB: {{DB_NAME}}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    command:
+      - postgres
+      - -c
+      - wal_level=logical          # Required for CDC
+      - -c
+      - max_wal_senders=10          # Allow up to 10 concurrent replication connections
+      - -c
+      - max_replication_slots=10    # Allow up to 10 replication slots
+    ports:
+      - "{{PORT}}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - {{NETWORK_NAME}}
+    restart: unless-stopped
+
+  # Redpanda Connect - CDC Connector
+  # Streams changes from PostgreSQL to Kafka topics
+  redpanda-connect:
+    image: docker.redpanda.com/redpandadata/connect:latest
+    container_name: {{PROJECT_NAME}}-redpanda-connect
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./config/redpanda-connect.yaml:/connect.yaml:ro
+    command: ["run", "/connect.yaml"]
+    ports:
+      - "{{CONNECTOR_PORT}}:4195"  # HTTP API for health checks and metrics
+    environment:
+      REDPANDA_LICENSE: ${REDPANDA_LICENSE:-}
+      LOG_LEVEL: "info"
+    networks:
+      - {{NETWORK_NAME}}
+      - default  # Connect to Moose Redpanda (if using Moose)
+    restart: unless-stopped
+    profiles:
+      - cdc  # Only start with: docker compose --profile cdc up
+
+volumes:
+  postgres_data:
+    name: {{PROJECT_NAME}}_postgres_data
+
+networks:
+  {{NETWORK_NAME}}:
+    name: {{NETWORK_NAME}}
+    driver: bridge

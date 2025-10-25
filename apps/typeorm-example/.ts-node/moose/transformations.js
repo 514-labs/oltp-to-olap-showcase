@@ -8,21 +8,20 @@ function transformCdcPayload(event) {
         action: 'CDC Transform',
         message: JSON.stringify(event),
     });
-    const { _metadata, ...payload } = event;
     (0, moose_lib_1.cliLog)({
         action: 'Payload',
-        message: JSON.stringify(payload),
+        message: JSON.stringify(event.payload),
     });
-    const lsn = parseInt(_metadata.lsn, 16);
-    if (_metadata.operation === 'delete') {
+    const lsn = parseInt(event.metadata.lsn, 16);
+    if (event.metadata.operation === 'delete') {
         return {
-            ...payload,
+            ...event.payload,
             is_deleted: 1,
             lsn: lsn,
         };
     }
     return {
-        ...payload,
+        ...event.payload,
         is_deleted: 0,
         lsn: lsn,
     };
@@ -30,7 +29,7 @@ function transformCdcPayload(event) {
 externalTopics_1.TypeormCdcEventsStream.addConsumer((event) => {
     const cdcEvent = event;
     let processedPayload;
-    switch (cdcEvent._metadata.table) {
+    switch (cdcEvent.metadata.table) {
         case 'products':
             processedPayload = transformCdcPayload(cdcEvent);
             sinkTopics_1.ProductDimensionStream.send(processedPayload);
@@ -48,7 +47,7 @@ externalTopics_1.TypeormCdcEventsStream.addConsumer((event) => {
             sinkTopics_1.OrderItemStream.send(processedPayload);
             break;
         default:
-            throw new Error(`Unknown table: ${cdcEvent._metadata.table}`);
+            throw new Error(`Unknown table: ${cdcEvent.metadata.table}`);
     }
 }, { deadLetterQueue: sinkTopics_1.UnknownEventDeadLetterTopic });
 sinkTopics_1.CustomerDimensionStream.addConsumer((event) => {
@@ -69,12 +68,4 @@ sinkTopics_1.UnknownEventDeadLetterTopic.addConsumer((event) => {
         message: JSON.stringify(event),
     });
 });
-const orderItem = { id: 3, orderId: 1, price: 777.88, productId: 1, quantity: 1 };
-const order = {
-    customerId: 7,
-    id: 1,
-    orderDate: '2025-10-21T19:33:53.571Z',
-    status: 'cancelled',
-    total: 4254.39,
-};
 //# sourceMappingURL=transformations.js.map
