@@ -6,7 +6,7 @@ Stream changes from your OLTP database to OLAP analytics in real-time using Chan
 
 ## 🎯 New Developer? Start Here
 
-**This repository demonstrates Change Data Capture (CDC)** - the practice of streaming database changes to analytics systems in real-time. Instead of polling or batch ETL jobs, CDC captures every INSERT, UPDATE, and DELETE from PostgreSQL's transaction log and pipes it to ClickHouse for lightning-fast analytics.
+This repository demonstrates Change Data Capture (CDC) - the practice of streaming database changes to analytics systems in real-time. Instead of polling or batch ETL jobs, CDC captures every INSERT, UPDATE, and DELETE from PostgreSQL's transaction log and pipes it to ClickHouse for lightning-fast analytics.
 
 **Choose your path:**
 
@@ -29,11 +29,13 @@ A complete, working example of an OLTP-to-OLAP CDC pipeline with:
 ## Project Status
 
 **Production-Ready:**
+
 - ✅ **TypeORM Example** - TypeScript/Node.js with Express API (port 3000)
 - ✅ **SQLModel Example** - Python/FastAPI implementation (port 3002)
 - ✅ **Test Client** - React UI with in-app backend switching
 
 **Experimental (Setup Available):**
+
 - ⚠️ **Drizzle Example** - Basic setup working (port 3003)
 - ⚠️ **Prisma Example** - Basic setup working (port 3004)
 - ⚠️ **Sequelize Example** - Basic setup working (port 3005)
@@ -59,6 +61,7 @@ All five examples include interactive `setup.sh` scripts that guide you through 
 ## Quick Start
 
 **Prerequisites:**
+
 - Docker and Docker Compose
 - Node.js 18+ (for TypeScript examples) or Python 3.10+ (for Python examples)
 - Redpanda Enterprise License - [Get a free 30-day trial](https://redpanda.com/try-enterprise)
@@ -85,6 +88,7 @@ make logs-connector     # Debug CDC connector
 ```
 
 **Why use setup.sh:**
+
 - 📚 **Educational** - Learn what CDC is and how it works as you set it up
 - ✅ **Debuggable** - Clear status checks and error messages at each step
 - 🔧 **Flexible** - Run all steps together or individual steps for troubleshooting
@@ -150,6 +154,7 @@ pnpm install && pnpm dev
 Visit http://localhost:3001 to create data and watch CDC in action.
 
 **The test client features:**
+
 - 🔄 **Dynamic backend switching** - Switch between TypeORM, SQLModel, or other backends using the in-app Settings button
 - 🎯 **Auto-detection** - Automatically shows settings modal if it can't connect to the backend
 - 🎲 **Data generation** - Create random customers, products, and orders with one click
@@ -161,6 +166,7 @@ See the [Test Client README](apps/test-client/README.md) for complete usage inst
 ## Documentation
 
 ### Getting Started
+
 - [TypeORM Example](apps/typeorm-example/README.md) - TypeScript/Node.js implementation (recommended for beginners)
 - [SQLModel Example](apps/sqlmodel-example/README.md) - Python/FastAPI implementation
 - [Test Client](apps/test-client/README.md) - Interactive UI for testing with backend switching
@@ -169,6 +175,7 @@ See the [Test Client README](apps/test-client/README.md) for complete usage inst
 - [Sequelize Example](apps/sequelize-example/README.md) - Experimental Sequelize ORM implementation
 
 ### Architecture & Design
+
 - [CDC Pipeline Design](apps/typeorm-example/docs/CDC_PIPELINE_DESIGN.md) - Deep dive into how CDC works
 - [OLAP Conversion Guide](apps/typeorm-example/docs/OLAP_CONVERSION_GUIDE.md) - Patterns for converting ORM models to analytics tables
 - [TypeORM Setup Guide](apps/typeorm-example/docs/SETUP_GUIDE.md) - Detailed setup with troubleshooting tips
@@ -216,6 +223,7 @@ oltp-to-olap-showcase/
 Your application uses standard ORM models with relationships:
 
 **TypeORM:**
+
 ```typescript
 @Entity()
 export class Order {
@@ -225,12 +233,13 @@ export class Order {
   @ManyToOne(() => Customer)
   customer: Customer;
 
-  @OneToMany(() => OrderItem, item => item.order)
+  @OneToMany(() => OrderItem, (item) => item.order)
   items: OrderItem[];
 }
 ```
 
 **SQLModel (Python):**
+
 ```python
 from sqlmodel import SQLModel, Field, Relationship
 
@@ -249,7 +258,7 @@ PostgreSQL's Write-Ahead Log (WAL) captures every change:
 {
   "table": "order",
   "operation": "insert",
-  "after": {"id": 1, "customer_id": 123, "status": "pending", "total": 99.99}
+  "after": { "id": 1, "customer_id": 123, "status": "pending", "total": 99.99 }
 }
 ```
 
@@ -263,8 +272,8 @@ Moose functions transform normalized data into denormalized analytics tables:
 // Denormalize: join customer data into orders
 export interface OrderFact {
   order_id: UInt64;
-  customer_name: string;    // From customers table
-  customer_email: string;   // From customers table
+  customer_name: string; // From customers table
+  customer_email: string; // From customers table
   status: string;
   total: Float64;
 }
@@ -293,6 +302,7 @@ ORDER BY revenue DESC;
 - Require historical data analysis alongside live transactions
 
 **Example scenarios:**
+
 - Revenue and sales analytics
 - Customer behavior analysis
 - Product performance metrics
@@ -302,6 +312,7 @@ ORDER BY revenue DESC;
 ## Technology Stack
 
 **Shared Infrastructure:**
+
 - PostgreSQL 15 with logical replication
 - Redpanda Connect (CDC connector for capturing WAL changes)
 - Redpanda (Kafka-compatible streaming platform)
@@ -310,15 +321,16 @@ ORDER BY revenue DESC;
 
 **ORM Examples:**
 
-| Example | Language | ORM | API Framework | Port |
-|---------|----------|-----|---------------|------|
-| TypeORM | TypeScript | TypeORM 0.3 | Express + Scalar | 3000 |
-| SQLModel | Python | SQLModel (SQLAlchemy 2.0 + Pydantic) | FastAPI | 3002 |
-| Drizzle | TypeScript | Drizzle | Express | 3003 |
-| Prisma | TypeScript | Prisma | Express | 3004 |
-| Sequelize | TypeScript | Sequelize | Express | 3005 |
+| Example   | Language   | ORM                                  | API Framework    | Port |
+| --------- | ---------- | ------------------------------------ | ---------------- | ---- |
+| TypeORM   | TypeScript | TypeORM 0.3                          | Express + Scalar | 3000 |
+| SQLModel  | Python     | SQLModel (SQLAlchemy 2.0 + Pydantic) | FastAPI          | 3002 |
+| Drizzle   | TypeScript | Drizzle                              | Express          | 3003 |
+| Prisma    | TypeScript | Prisma                               | Express          | 3004 |
+| Sequelize | TypeScript | Sequelize                            | Express          | 3005 |
 
 **Test Client:**
+
 - React 18 + TypeScript + Vite
 - shadcn/ui components (Dialog, Button, etc.)
 - Tailwind CSS for styling
@@ -344,6 +356,7 @@ Changes appear in ClickHouse within milliseconds, enabling live dashboards and u
 Contributions are welcome! This is an educational project demonstrating CDC patterns across multiple ORMs.
 
 **Areas for contribution:**
+
 - 🐛 **Bug fixes** - Improvements to existing TypeORM and SQLModel examples
 - 📚 **Documentation** - Clarify setup instructions, add troubleshooting tips
 - 🔧 **Experimental ORMs** - Help stabilize Drizzle, Prisma, and Sequelize examples
@@ -352,6 +365,7 @@ Contributions are welcome! This is an educational project demonstrating CDC patt
 - 🎨 **UI improvements** - Enhance test client user experience
 
 **Why contribute?**
+
 - Learn CDC patterns hands-on
 - See how different ORMs handle the same architecture
 - Build portfolio-worthy work with real-world data engineering
@@ -362,12 +376,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 ## Learn More
 
 **Core Technologies:**
+
 - [Moose Documentation](https://docs.fiveonefour.com/moose/)
 - [Redpanda Connect](https://docs.redpanda.com/redpanda-connect/)
 - [ClickHouse Documentation](https://clickhouse.com/docs/)
 - [PostgreSQL Logical Replication](https://www.postgresql.org/docs/current/logical-replication.html)
 
 **ORMs & Frameworks:**
+
 - [TypeORM](https://typeorm.io/) - TypeScript ORM
 - [SQLModel](https://sqlmodel.tiangolo.com/) - Python ORM combining SQLAlchemy + Pydantic
 - [SQLAlchemy 2.0](https://docs.sqlalchemy.org/) - Python SQL toolkit (SQLModel foundation)
@@ -389,6 +405,7 @@ MIT
 3. **Interactive Learning** - Run `./setup.sh` in any example directory for guided CDC configuration
 
 **Choose your ORM:**
+
 - [TypeORM](apps/typeorm-example/README.md) - TypeScript/Node.js (recommended for beginners)
 - [SQLModel](apps/sqlmodel-example/README.md) - Python/FastAPI
 - [Drizzle](apps/drizzle-example/README.md), [Prisma](apps/prisma-example/README.md), [Sequelize](apps/sequelize-example/README.md) - Experimental

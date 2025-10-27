@@ -1,4 +1,5 @@
 language = "Python"
+source_dir = "moose"
 
 [redpanda_config]
 broker = "localhost:19092"
