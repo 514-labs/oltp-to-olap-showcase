@@ -18,10 +18,15 @@ Transform TypeORM entities into denormalized OLAP tables with real-time CDC repl
 
 ⚠️ **Requires a Redpanda Enterprise License** — grab a free 30-day trial at [redpanda.com/try-enterprise](https://redpanda.com/try-enterprise)
 
-### 1. Set License
+### 1. Configure Environment
+
+Copy the .env.example file to .env and update the REDPANDA_LICENSE with your Redpanda Enterprise license:
 
 ```bash
-export REDPANDA_LICENSE="your_license_key_here"
+cp .env.example .env
+
+# Edit .env and set REDPANDA_LICENSE to your Redpanda Enterprise license
+REDPANDA_LICENSE="your_license_key_here"
 ```
 
 ### 2. Install dependencies
@@ -34,27 +39,33 @@ pnpm install
 
 ```bash
 # Terminal 1: Start PostgreSQL and configure CDC (interactive)
-./setup.sh
+pnpm setup-cdc
 ```
 
 The script brings up PostgreSQL, walks you through running `pnpm setup-db`, and configures the CDC publication and replication slot.
 
-### 4. Start Moose (CDC pipeline) and the API
+### 4. Start Moose dev server
 
 ```bash
-# Terminal 2: Start Moose (brings up Redpanda Connect + ClickHouse sinks)
+# Terminal 1: Start Moose (brings up Redpanda Connect + ClickHouse sinks)
 moose dev
-
-# Terminal 3: Start the API server (keeps running)
-pnpm dev
 ```
 
 You should see Moose log CDC activity as you interact with the API.
 
-### 5. Test the Pipeline
+### 5. Start the Express API server
 
 ```bash
-# Terminal 4: Start test client (optional)
+# Terminal 2: Start the API server
+pnpm dev
+```
+
+The API will be available at http://localhost:3000 with OpenAPI docs at http://localhost:3000/reference
+
+### 6. Start the client (optional)
+
+```bash
+# Terminal 3: Start test client
 cd ../test-client
 pnpm install
 pnpm dev
