@@ -19,15 +19,16 @@ cd apps/{project-example}
 make status             # Check what's running
 ```
 
+The script will also offer to run your project's table initialization command (for example, `pnpm setup-db` or `python init_db.py`) so PostgreSQL is ready before CDC is configured.
+
 ## Project Configuration Matrix
 
-| Project | Database | Port | Container Prefix |
-|---------|----------|------|------------------|
-| typeorm | `typeorm_db` | 5433 | `typeorm` |
-| sqlmodel | `sqlmodel_db` | 5434 | `sqlmodel` |
-| drizzle | `drizzle_db` | 5435 | `drizzle` |
-| prisma | `prisma_db` | 5436 | `prisma` |
-| sequelize | `sequelize_db` | 5437 | `sequelize` |
+| Project | Database | Port | Container Prefix | Notes |
+|---------|----------|------|------------------|-------|
+| typeorm | `typeorm_db` | 5433 | `typeorm` | Default demo stack |
+| sqlmodel | `sqlmodel_db` | 5433 | `sqlmodel` | Shares host port 5433 – run separately or override `DB_PORT` |
+| drizzle | `drizzle_db` | 5435 | `drizzle` | Experimental |
+| prisma | `prisma_db` | 5436 | `prisma` | Experimental |
 
 ## Docker Files
 
@@ -82,11 +83,10 @@ make status             # Verify everything is running
 
 Each ORM has different conventions:
 
-- **TypeORM**: `customers`, `products`, `orders`, `order_items` (lowercase, underscores)
+- **TypeORM**: `customers`, `products`, `orders`, `order_items` (lowercase with underscores)
 - **SQLModel**: `customer`, `product`, `order`, `orderitem` (lowercase, no underscores)
-- **Drizzle**: `customers`, `products`, `orders`, `order_items` (lowercase, underscores)
-- **Prisma**: `Customer`, `Product`, `Order`, `OrderItem` (PascalCase)
-- **Sequelize**: `Customers`, `Products`, `Orders`, `OrderItems` (PascalCase, plural)
+- **Drizzle**: `customers`, `products`, `orders`, `order_items` (lowercase with underscores)
+- **Prisma**: `Customer`, `Product`, `Order`, `OrderItem` (PascalCase – adjust connector filters accordingly)
 
 ## Manual Operations
 
@@ -137,4 +137,4 @@ docker compose -f docker-compose.oltp.yaml down -v
 
 - [Main README](../README.md)
 - [Troubleshooting Guide](../TROUBLESHOOTING.md)
-- [Test Client Configuration](./test-client/port-configuration.md)
+- [Test Client Configuration](../apps/test-client/docs/port-configuration.md)

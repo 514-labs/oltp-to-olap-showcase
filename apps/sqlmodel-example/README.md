@@ -1,10 +1,8 @@
 # SQLModel CDC Example
 
-This project walks through an end-to-end CDC pipeline that moves SQLModel-backed PostgreSQL changes into ClickHouse using Redpanda and Moose. It highlights dynamic stream routing, shared SQLModel/Pydantic models, and a practical pattern for delete events that arrive without full row data.
+This project walks through an end-to-end CDC pipeline that moves SQLModel-backed PostgreSQL changes into ClickHouse using Redpanda and MooseStack. It highlights dynamic stream routing, shared SQLModel/Pydantic models, and a practical pattern for delete events that arrive without full row data.
 
 ## What You'll See
-
-You will see:
 
 - Runtime stream lookup that routes CDC events without hard-coded table maps
 - A base-model pattern that normalizes sparse `delete` events
@@ -16,7 +14,7 @@ You will see:
 ## Architecture
 
 ```
-PostgreSQL (OLTP)           Redpanda               Moose              ClickHouse (OLAP)
+PostgreSQL (OLTP)           Redpanda               Moose Streams       ClickHouse (OLAP)
 ┌─────────────────┐         ┌─────────┐            ┌──────────┐       ┌──────────────┐
 │ SQLModel Tables │ ──WAL─> │ Connect │ ──Kafka──> │ Transform│ ───>  │ ReplacingMT  │
 │ Normalized      │         │ (CDC)   │            │ Dynamic  │       │ Denormalized │
@@ -46,7 +44,7 @@ PostgreSQL (OLTP)           Redpanda               Moose              ClickHouse
 
 ## The Delete Event Challenge
 
-PostgreSQL logical replication emits full rows for `insert` and `update`, but `delete` events only include the primary key; every other field arrives as `None`. In ClickHouse we aim to keep columns non-nullable and use `LowCardinality` where possible for compression. Accepting the raw delete payload would force `Nullable` columns and negate those optimizations.
+PostgreSQL logical replication emits full rows for `insert` and `update`, but `delete` events only include the primary key; every other field arrives as `None`. In ClickHouse we aim to keep columns non-nullable and use `LowCardinality` where possible for optimal compression and read performance. Accepting the raw delete payload would force `Nullable` columns and negate those optimizations.
 
 **Solution in this example**
 
@@ -109,7 +107,7 @@ See [docs/OLTP_TO_OLAP_MODEL_TRANSLATION.md](docs/OLTP_TO_OLAP_MODEL_TRANSLATION
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.10+
 - Docker and Docker Compose
 - Redpanda Enterprise License - [Get free 30-day trial](https://redpanda.com/try-enterprise)
 
@@ -155,8 +153,8 @@ export REDPANDA_LICENSE="your_license_key_here"
 ```bash
 ./setup.sh
 # Starts PostgreSQL with logical replication enabled
-# Creates tables from SQLModel definitions
-# Configures CDC connector
+# Waits for tables (run python init_db.py when prompted)
+# Configures CDC publication & replication slot
 ```
 
 **Terminal 2: Moose**
@@ -169,10 +167,10 @@ moose dev
 **Terminal 3: FastAPI Server**
 
 ```bash
-# First time only
-python init_db.py
+source venv/bin/activate
+# If you skipped the setup prompt, create tables now (safe to rerun)
+# python init_db.py
 
-# Start server
 fastapi dev src/main.py --port 3002
 ```
 
@@ -209,7 +207,7 @@ curl -X POST http://localhost:3002/api/products \
 ### 2. Check PostgreSQL (OLTP)
 
 ```bash
-docker exec -it sqlmodel-postgres psql -U postgres -d sqlalchemy_db
+docker exec -it sqlmodel-postgres psql -U postgres -d sqlmodel_db
 
 SELECT * FROM customer LIMIT 5;
 SELECT * FROM "order" LIMIT 5;
@@ -266,43 +264,41 @@ Features:
 **Implementation details:**
 
 - [CDC_TRANSFORMATION_ARCHITECTURE.md](docs/CDC_TRANSFORMATION_ARCHITECTURE.md) - Dynamic routing, DLQ, scaling
-- [OLTP_TO_OLAP_MODEL_TRANSLATION.md](docs/OLTP_TO_OLAP_MODEL_TRANSLATION.md) - Type introspection, Field defaults, delete event handling
-- [WHY_SQLMODEL.md](docs/WHY_SQLMODEL.md) - Context on SQLModel vs SQLAlchemy + Pydantic
+- [OLTP_TO_OLAP_MODEL_TRANSLATION.md](docs/OLTP_TO_OLAP_MODEL_TRANSLATION.md) - Type introspection, field defaults, delete event handling
+- [SETUP_SCRIPT.md](docs/SETUP_SCRIPT.md) - How `./setup.sh` orchestrates Postgres + CDC
 
 **Setup guides:**
 
 - [../../README.md](../../README.md) - Project overview
-- [Database Management Guide](docs/DATABASE_MANAGEMENT.md) - Initialization strategies
-- [FastAPI CLI Guide](docs/FASTAPI_CLI_GUIDE.md) - Dev server usage
+- [Troubleshooting](../../TROUBLESHOOTING.md) - Common CDC issues and fixes
+- [Test Client README](../test-client/README.md) - Generate data and observe CDC
 
 ## Project Structure
 
 ```
 sqlmodel-example/
 ├── src/
-│   ├── db/                  # OLTP models (SQLModel)
-│   │   ├── customer.py
-│   │   ├── product.py
-│   │   ├── order.py
-│   │   └── order_item.py
-│   ├── schemas.py           # API request/response schemas
-│   └── main.py              # FastAPI application
+│   ├── db/
+│   │   ├── base.py          # Session + engine helpers
+│   │   └── models.py        # SQLModel OLTP entities & DTOs
+│   └── main.py              # FastAPI application & routes
 │
 ├── moose/
-│   ├── models/
-│   │   └── models.py        # OLAP models (Pydantic + CdcOlapModelBase)
-│   ├── transformations/
-│   │   └── process_cdc_events.py  # Dynamic routing transformation
+│   ├── models/models.py     # OLAP models (Pydantic + CdcOlapModelBase)
+│   ├── transformations/process_cdc_events.py  # Dynamic routing transformation
 │   ├── sinks/
 │   │   ├── streams.py       # Stream definitions
 │   │   └── tables.py        # ClickHouse table configs
-│   └── main.py              # Wire streams to tables
+│   ├── apis/                # Moose HTTP endpoints (optional)
+│   └── main.py              # Wire sources, transforms, and sinks
 │
 ├── init_db.py               # Database initialization
 ├── setup.sh                 # Interactive setup script
 ├── docker-compose.oltp.yaml # PostgreSQL service
 ├── redpanda-connect.yaml    # CDC connector config
-└── moose.config.toml        # Moose configuration
+├── moose.config.toml        # Moose configuration
+├── requirements.txt         # Python dependencies
+└── README.md                # This file
 ```
 
 ## Technology Stack
@@ -378,7 +374,7 @@ make logs-connector
 **Check data exists:**
 
 ```bash
-docker exec -it sqlmodel-postgres psql -U postgres -d sqlalchemy_db -c "SELECT COUNT(*) FROM customer;"
+docker exec -it sqlmodel-postgres psql -U postgres -d sqlmodel_db -c "SELECT COUNT(*) FROM customer;"
 ```
 
 ### Delete Events Showing Empty Strings
@@ -426,11 +422,11 @@ The transformation in `process_cdc_events.py` requires no changes due to dynamic
 
 ## Environment Variables
 
-| Variable           | Default                                                       | Description                     |
-| ------------------ | ------------------------------------------------------------- | ------------------------------- |
-| `DATABASE_URL`     | `postgresql://postgres:postgres@localhost:5434/sqlalchemy_db` | PostgreSQL connection           |
-| `AUTO_INIT_DB`     | `false`                                                       | Auto-create tables on startup   |
-| `REDPANDA_LICENSE` | Required                                                      | Redpanda Enterprise license key |
+| Variable           | Default                                                     | Description                                                    |
+| ------------------ | ----------------------------------------------------------- | -------------------------------------------------------------- |
+| `DATABASE_URL`     | `postgresql://postgres:postgres@localhost:5433/sqlmodel_db` | PostgreSQL connection (replace port if you override `DB_PORT`) |
+| `AUTO_INIT_DB`     | `false`                                                     | Auto-create tables on startup                                  |
+| `REDPANDA_LICENSE` | Required                                                    | Redpanda Enterprise license key                                |
 
 ## Additional Resources
 
@@ -440,4 +436,4 @@ The transformation in `process_cdc_events.py` requires no changes due to dynamic
 - [PostgreSQL Logical Replication](https://www.postgresql.org/docs/current/logical-replication.html)
 - [Redpanda Connect](https://docs.redpanda.com/redpanda-connect/)
 - [TypeORM Example](../typeorm-example/README.md) - TypeScript/Node.js implementation
-- [Main Project README](../../README.md) - All five ORM examples
+- [Main Project README](../../README.md) - Repository overview & quick start

@@ -495,5 +495,5 @@ This translation pattern leverages core Python and Pydantic features:
 ## Related Documentation
 
 - [CDC Transformation Architecture](./CDC_TRANSFORMATION_ARCHITECTURE.md) - Dynamic routing and event processing
-- [SQLALCHEMY_TO_OLAP_GUIDE.md](./SQLALCHEMY_TO_OLAP_GUIDE.md) - General migration guide
-- [WHY_SQLMODEL.md](./WHY_SQLMODEL.md) - Why we use SQLModel for OLTP models
+- [CDC Transformation Architecture](./CDC_TRANSFORMATION_ARCHITECTURE.md) - Runtime routing pattern
+- [SETUP_SCRIPT.md](./SETUP_SCRIPT.md) - How the automation wires PostgreSQL and CDC together

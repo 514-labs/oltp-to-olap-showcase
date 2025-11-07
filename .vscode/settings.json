@@ -13,5 +13,6 @@
       "driver": "ClickHouse",
       "name": "moose"
     }
-  ]
+  ],
+  "postman.settings.dotenv-detection-notification-visibility": false
 }

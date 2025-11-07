@@ -11,8 +11,8 @@ Running `./setup.sh` with no arguments walks through the full setup:
    - Waits for the database to accept connections on `DB_PORT` (default `5434`).  
 
 2. **Wait for Tables**  
-   - Calls `python init_db.py` (overridable via `DB_MIGRATION_COMMAND`) to ensure the OLTP tables exist.  
-   - Polls the database until the tables in `TABLE_NAMES` (customer, product, order, orderitem) are present.  
+   - Prompts you to run `python init_db.py` (overridable via `DB_MIGRATION_COMMAND`) so the OLTP tables are created.  
+   - Polls the database until the tables in `TABLE_NAMES` (customer, product, order, orderitem) are present, with the option to rerun the command if needed.  
 
 3. **Configure CDC**  
    - Creates the logical replication publication (`POSTGRES_CDC_PUBLICATION`).  

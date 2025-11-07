@@ -2,6 +2,8 @@
 
 Common issues and their solutions for the OLTP + CDC setup.
 
+> The shell commands below use the TypeORM example names (`typeorm-postgres`, `typeorm_db`, port `5433`). If you're working inside another example, swap those values for the container and database names printed by `./setup.sh status`.
+
 ## Table of Contents
 
 - [Setup Issues](#setup-issues)
@@ -35,10 +37,10 @@ Error: bind: address already in use
 
 **Solution:**
 ```bash
-# Find what's using the port
-lsof -i :{{PORT}}
+# Find what's using the port (replace 5433 with the DB_PORT from your project)
+lsof -i :5433
 
-# Either stop that process, or change the port in docker-compose.yaml
+# Either stop that process, or change the port in docker-compose.oltp.yaml
 # Then restart
 make restart
 ```
@@ -88,7 +90,7 @@ make start-db
 
 **Symptoms:**
 ```
-psql: error: connection to server at "localhost", port {{PORT}} failed
+psql: error: connection to server at "localhost", port 5433 failed
 ```
 
 **Debug:**
@@ -96,8 +98,8 @@ psql: error: connection to server at "localhost", port {{PORT}} failed
 # 1. Check container is running
 docker ps | grep postgres
 
-# 2. Check health
-docker inspect {{PROJECT_NAME}}-oltp-postgres | grep Health -A 10
+# 2. Check health (use your container name, e.g., typeorm-postgres or sqlmodel-postgres)
+docker inspect typeorm-postgres | grep Health -A 10
 
 # 3. Check logs
 make logs-db
@@ -120,8 +122,8 @@ make restart
 **Solution:**
 ```bash
 # Wait a bit longer (can take 10-30 seconds)
-# Check readiness
-docker exec {{PROJECT_NAME}}-oltp-postgres pg_isready -U postgres
+# Check readiness (adjust container name as needed, e.g., typeorm-postgres)
+docker exec typeorm-postgres pg_isready -U postgres
 
 # If it doesn't become ready after a minute, check logs
 make logs-db
@@ -143,8 +145,8 @@ This is usually safe to ignore. The CDC setup checks for existing publications.
 
 To recreate:
 ```bash
-# Connect to database
-docker exec -it {{PROJECT_NAME}}-oltp-postgres psql -U postgres -d {{DB_NAME}}
+# Connect to database (replace names if you're running a different example)
+docker exec -it typeorm-postgres psql -U postgres -d typeorm_db
 
 # Drop and recreate
 DROP PUBLICATION redpanda_cdc_publication;
@@ -152,6 +154,8 @@ DROP PUBLICATION redpanda_cdc_publication;
 
 # Run setup again
 ./setup.sh setup-cdc
+
+> Using SQLModel? Replace `typeorm-postgres` and `typeorm_db` in the commands above with `sqlmodel-postgres` and `sqlmodel_db`. The same pattern applies to the experimental Drizzle/Prisma containers.
 ```
 
 ### Replication slot already exists
@@ -164,13 +168,13 @@ ERROR: replication slot "redpanda_cdc_slot" already exists
 **Solution:**
 ```bash
 # Check if slot is active
-docker exec {{PROJECT_NAME}}-oltp-postgres psql -U postgres -d {{DB_NAME}} -c \
+docker exec typeorm-postgres psql -U postgres -d typeorm_db -c \
   "SELECT * FROM pg_replication_slots WHERE slot_name='redpanda_cdc_slot';"
 
 # If active and in use, don't delete it
 # If inactive, you can drop and recreate:
 
-docker exec {{PROJECT_NAME}}-oltp-postgres psql -U postgres -d {{DB_NAME}} -c \
+docker exec typeorm-postgres psql -U postgres -d typeorm_db -c \
   "SELECT pg_drop_replication_slot('redpanda_cdc_slot');"
 
 # Run setup again
@@ -185,15 +189,15 @@ docker exec {{PROJECT_NAME}}-oltp-postgres psql -U postgres -d {{DB_NAME}} -c \
 **Solution:**
 ```bash
 # Check which tables are in publication
-docker exec {{PROJECT_NAME}}-oltp-postgres psql -U postgres -d {{DB_NAME}} -c \
+docker exec typeorm-postgres psql -U postgres -d typeorm_db -c \
   "SELECT * FROM pg_publication_tables WHERE pubname='redpanda_cdc_publication';"
 
 # Add missing tables
-docker exec {{PROJECT_NAME}}-oltp-postgres psql -U postgres -d {{DB_NAME}} -c \
+docker exec typeorm-postgres psql -U postgres -d typeorm_db -c \
   "ALTER PUBLICATION redpanda_cdc_publication ADD TABLE your_table_name;"
 
 # Or recreate publication with all tables
-docker exec {{PROJECT_NAME}}-oltp-postgres psql -U postgres -d {{DB_NAME}} -c \
+docker exec typeorm-postgres psql -U postgres -d typeorm_db -c \
   "DROP PUBLICATION redpanda_cdc_publication; \
    CREATE PUBLICATION redpanda_cdc_publication FOR ALL TABLES;"
 ```
@@ -207,7 +211,7 @@ docker exec {{PROJECT_NAME}}-oltp-postgres psql -U postgres -d {{DB_NAME}} -c \
 **Debug:**
 ```bash
 # Check replication lag
-docker exec {{PROJECT_NAME}}-oltp-postgres psql -U postgres -d {{DB_NAME}} -c \
+docker exec typeorm-postgres psql -U postgres -d typeorm_db -c \
   "SELECT slot_name, active, pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) AS lag_bytes \
    FROM pg_replication_slots \
    WHERE slot_name='redpanda_cdc_slot';"
@@ -222,12 +226,12 @@ make logs-connector
 ./setup.sh start-connector
 
 # 3. If lag is huge and you don't need old events, reset the slot:
-docker exec {{PROJECT_NAME}}-oltp-postgres psql -U postgres -d {{DB_NAME}} -c \
+docker exec typeorm-postgres psql -U postgres -d typeorm_db -c \
   "SELECT pg_drop_replication_slot('redpanda_cdc_slot'); \
    SELECT pg_create_logical_replication_slot('redpanda_cdc_slot', 'pgoutput');"
 
 # Restart connector
-docker restart {{PROJECT_NAME}}-redpanda-connect
+docker restart redpanda-connect
 ```
 
 ---
@@ -246,7 +250,7 @@ docker restart {{PROJECT_NAME}}-redpanda-connect
 make logs-connector
 
 # Check exit code
-docker inspect {{PROJECT_NAME}}-redpanda-connect | grep ExitCode
+docker inspect redpanda-connect | grep ExitCode
 ```
 
 **Common causes:**
@@ -270,7 +274,7 @@ docker inspect {{PROJECT_NAME}}-redpanda-connect | grep ExitCode
    Solution: Set REDPANDA_LICENSE environment variable:
    ```bash
    export REDPANDA_LICENSE="your-license-key"
-   docker restart {{PROJECT_NAME}}-redpanda-connect
+   docker restart redpanda-connect
    ```
 
 ### Connector can't connect to PostgreSQL
@@ -286,13 +290,13 @@ Failed to connect to postgres: dial tcp: lookup ... no such host
 docker ps | grep postgres
 
 # 2. Check they're on the same network
-docker network inspect {{NETWORK_NAME}}
+docker network inspect typeorm-shared-network
 
 # 3. Verify connection string in config/redpanda-connect.yaml
-# Should be: postgres://postgres:postgres@{{PROJECT_NAME}}-oltp-postgres:5432/{{DB_NAME}}
+# Should be: postgres://postgres:postgres@typeorm-postgres:5432/typeorm_db
 
 # 4. Restart connector
-docker restart {{PROJECT_NAME}}-redpanda-connect
+docker restart redpanda-connect
 ```
 
 ### Replication slot not found
@@ -308,7 +312,7 @@ replication slot "redpanda_cdc_slot" does not exist
 ./setup.sh setup-cdc
 
 # Restart connector
-docker restart {{PROJECT_NAME}}-redpanda-connect
+docker restart redpanda-connect
 ```
 
 ### No changes being captured
@@ -324,14 +328,14 @@ docker restart {{PROJECT_NAME}}-redpanda-connect
 ./setup.sh verify
 
 # 2. Check replication slot is being consumed
-docker exec {{PROJECT_NAME}}-oltp-postgres psql -U postgres -d {{DB_NAME}} -c \
+docker exec typeorm-postgres psql -U postgres -d typeorm_db -c \
   "SELECT * FROM pg_replication_slots WHERE slot_name='redpanda_cdc_slot';"
 
 # 3. Check connector logs for activity
 make logs-connector
 
 # 4. Make a test change
-docker exec {{PROJECT_NAME}}-oltp-postgres psql -U postgres -d {{DB_NAME}} -c \
+docker exec typeorm-postgres psql -U postgres -d typeorm_db -c \
   "INSERT INTO customers (name) VALUES ('Test User');"
 
 # 5. Watch logs
@@ -341,10 +345,10 @@ make logs-connector
 **Solutions:**
 ```bash
 # If slot shows active=false, restart connector
-docker restart {{PROJECT_NAME}}-redpanda-connect
+docker restart redpanda-connect
 
 # If tables aren't in publication, add them
-docker exec {{PROJECT_NAME}}-oltp-postgres psql -U postgres -d {{DB_NAME}} -c \
+docker exec typeorm-postgres psql -U postgres -d typeorm_db -c \
   "ALTER PUBLICATION redpanda_cdc_publication ADD TABLE your_table;"
 ```
 
@@ -384,11 +388,11 @@ docker exec {{PROJECT_NAME}}-oltp-postgres psql -U postgres -d {{DB_NAME}} -c \
 **Solutions:**
 ```bash
 # Check active connections
-docker exec {{PROJECT_NAME}}-oltp-postgres psql -U postgres -d {{DB_NAME}} -c \
+docker exec typeorm-postgres psql -U postgres -d typeorm_db -c \
   "SELECT * FROM pg_stat_activity WHERE state='active';"
 
 # Check slow queries
-docker exec {{PROJECT_NAME}}-oltp-postgres psql -U postgres -d {{DB_NAME}} -c \
+docker exec typeorm-postgres psql -U postgres -d typeorm_db -c \
   "SELECT query, calls, total_time, mean_time \
    FROM pg_stat_statements \
    ORDER BY total_time DESC LIMIT 10;"
@@ -403,10 +407,10 @@ docker exec {{PROJECT_NAME}}-oltp-postgres psql -U postgres -d {{DB_NAME}} -c \
 **Solutions:**
 ```bash
 # Check disk usage
-docker exec {{PROJECT_NAME}}-oltp-postgres du -sh /var/lib/postgresql/data
+docker exec typeorm-postgres du -sh /var/lib/postgresql/data
 
 # Check WAL files
-docker exec {{PROJECT_NAME}}-oltp-postgres ls -lh /var/lib/postgresql/data/pg_wal
+docker exec typeorm-postgres ls -lh /var/lib/postgresql/data/pg_wal
 
 # Check replication lag (see CDC Issues above)
 ```
@@ -462,10 +466,10 @@ make start
 
 ```bash
 # Via docker
-docker exec -it {{PROJECT_NAME}}-oltp-postgres psql -U postgres -d {{DB_NAME}}
+docker exec -it typeorm-postgres psql -U postgres -d typeorm_db
 
 # Via local psql
-psql postgresql://postgres:postgres@localhost:{{PORT}}/{{DB_NAME}}
+psql postgresql://postgres:postgres@localhost:5433/typeorm_db
 ```
 
 ### Useful PostgreSQL queries

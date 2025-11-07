@@ -13,6 +13,13 @@ CONNECTOR_CONTAINER=redpanda-connect
 
 DB_MIGRATION_COMMAND=${DB_MIGRATION_COMMAND:-pnpm setup-db}
 
+TABLE_NAMES=(
+    "customers"
+    "products"
+    "orders"
+    "order_items"
+)
+
 # Colors and formatting
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -70,6 +77,35 @@ print_warning() {
 
 print_waiting() {
     echo -e "${WAIT} $1"
+}
+
+run_db_setup() {
+    print_info "Running database initialization command:"
+    echo "   ${BOLD}$ ${DB_MIGRATION_COMMAND}${NC}"
+    echo ""
+
+    if eval "${DB_MIGRATION_COMMAND}"; then
+        print_success "Database initialization command completed successfully!"
+    else
+        print_error "Database initialization command failed"
+        echo ""
+        echo "Troubleshooting:"
+        echo "  1. Check the command output above for errors"
+        echo "  2. Ensure dependencies are installed (pnpm install)"
+        echo "  3. Re-run the command manually once the issue is resolved"
+        exit 1
+    fi
+}
+
+tables_exist() {
+    for table in "${TABLE_NAMES[@]}"; do
+        if ! docker exec "$CONTAINER_NAME" psql -U postgres -d "$DB_NAME" -tAc \
+            "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='$table'" \
+            2>/dev/null | grep -q 1; then
+            return 1
+        fi
+    done
+    return 0
 }
 
 # Check if Docker is running
@@ -143,68 +179,55 @@ wait_for_tables() {
     echo "   Required tables: ${TABLE_NAMES[*]}"
     echo ""
 
-    # Check if tables already exist
-    local all_exist=true
-    for table in "${TABLE_NAMES[@]}"; do
-        if ! docker exec "$CONTAINER_NAME" psql -U postgres -d "$DB_NAME" -tAc \
-            "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='$table'" \
-            2>/dev/null | grep -q 1; then
-            all_exist=false
-            break
-        fi
-    done
-
-    if [ "$all_exist" = true ]; then
+    if tables_exist; then
         print_success "All tables already exist!"
         return 0
     fi
 
-    print_info "Please run your application now to create tables:"
-    echo "   ${BOLD}$ ${DB_MIGRATION_COMMAND}${NC}"
+    print_info "This step creates tables using your TypeORM entities."
+    echo "   Command to run: ${BOLD}$ ${DB_MIGRATION_COMMAND}${NC}"
     echo ""
-    echo "Press Enter when tables are created (or 's' to skip)..."
 
-    # Wait for tables with timeout
+    read -r -p "Run this command now? [Y/n] " run_command
+    if [[ -z "$run_command" || "$run_command" =~ ^[Yy]$ ]]; then
+        run_db_setup
+    else
+        print_warning "Skipping automatic table creation. Run the command manually in another terminal."
+    fi
+
+    print_waiting "Watching for tables to appear..."
+
     local timeout=300  # 5 minutes
     local elapsed=0
 
     while [ $elapsed -lt $timeout ]; do
-        # Check for user input (non-blocking)
-        read -t 5 -n 1 input || true
-
-        if [ "$input" = "s" ] || [ "$input" = "S" ]; then
-            print_warning "Skipping table check..."
-            return 0
-        fi
-
-        # Check if all tables exist
-        all_exist=true
-        for table in "${TABLE_NAMES[@]}"; do
-            if ! docker exec "$CONTAINER_NAME" psql -U postgres -d "$DB_NAME" -tAc \
-                "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='$table'" \
-                2>/dev/null | grep -q 1; then
-                all_exist=false
-                break
-            fi
-        done
-
-        if [ "$all_exist" = true ]; then
+        if tables_exist; then
             echo ""
             print_success "All tables found!"
             return 0
         fi
 
+        sleep 5
         elapsed=$((elapsed + 5))
-        if [ $((elapsed % 10)) -eq 0 ]; then
+
+        if [ $((elapsed % 30)) -eq 0 ]; then
             print_waiting "Still waiting... (${elapsed}s elapsed)"
+            read -r -t 5 -p "Press 'r' to rerun ${DB_MIGRATION_COMMAND}, 's' to skip, or wait to continue: " input || true
+            if [[ "$input" =~ ^[Rr]$ ]]; then
+                run_db_setup
+                elapsed=0
+                print_waiting "Watching for tables to appear..."
+            elif [[ "$input" =~ ^[Ss]$ ]]; then
+                print_warning "Skipping table check..."
+                return 0
+            fi
         fi
     done
 
     echo ""
     print_error "Tables not found after ${timeout} seconds"
     echo ""
-    echo "Make sure your application is running and creating tables."
-    echo "You can skip this check with 's' if tables already exist."
+    echo "Make sure ${DB_MIGRATION_COMMAND} completed successfully and retry."
     exit 1
 }
 
@@ -320,11 +343,11 @@ verify_all() {
         print_success "${PARTY} CDC prerequisites complete!"
         echo ""
         echo "Next steps:"
-        echo "  ${BOLD}1. Start Moose (includes Redpanda Connect):${NC}"
-        echo "     ${CYAN}moose dev${NC}"
+        echo "  ${BOLD}1.${NC} Start Moose (includes Redpanda Connect): ${CYAN}moose dev${NC}"
+        echo "  ${BOLD}2.${NC} In a new terminal start the API: ${CYAN}pnpm dev${NC}"
+        echo "  ${BOLD}3.${NC} (Optional) Launch the test client: ${CYAN}cd ../test-client && pnpm dev${NC}"
         echo ""
-        echo "  2. Make changes to your database and watch CDC events"
-        echo "  3. Check status anytime: ${CYAN}./setup.sh status${NC}"
+        echo "Check status anytime: ${CYAN}./setup.sh status${NC}"
         echo ""
     else
         print_warning "Some components are not properly configured"
@@ -416,7 +439,7 @@ show_status() {
     fi
 
     echo ""
-    print_info "💡 Next: Run ${BOLD}${CYAN}moose dev${NC} to start Redpanda Connect"
+    print_info "💡 Next steps: ${BOLD}${CYAN}moose dev${NC}, then ${BOLD}${CYAN}pnpm dev${NC}"
     echo ""
 }
 
@@ -473,7 +496,9 @@ Examples:
   ./setup.sh status       # Check CDC setup status
 
 After setup is complete, run:
-  moose dev               # Start Moose (includes Redpanda Connect)
+  moose dev                                 # Start Moose (includes Redpanda Connect)
+  pnpm dev                                  # Start the TypeORM API
+  (optional) cd ../test-client && pnpm dev  # Launch the test client
 
 EOF
 }
@@ -487,7 +512,7 @@ main() {
             print_header "${PROJECT_NAME} OLTP + CDC Prerequisites"
             echo "This script will set up your database with CDC support."
             echo ""
-            echo "After this completes, run: ${BOLD}${CYAN}moose dev${NC}"
+            echo "After this completes, run: ${BOLD}${CYAN}moose dev${NC} and ${BOLD}${CYAN}pnpm dev${NC}"
             echo ""
             echo "Press Enter to continue, or Ctrl+C to cancel..."
             read

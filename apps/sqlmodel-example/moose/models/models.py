@@ -164,17 +164,20 @@ class Product(ProductBase, CdcOlapModelBase):
 
     LowCardinality: Dictionary encoding for low-cardinality strings (categories, status).
     Reduces storage and improves query performance.
+    Override validation to allow defaults for delete events.
     """
     id: Annotated[int, "uint64"]
     category: Annotated[str, "LowCardinality"]
-    # Inherited: name, price, createdAt (auto None→default conversion)
+    price: float = Field(ge=0)  # Remove gt=0 constraint, allow 0 for deletes
+    # Inherited: name, createdAt (auto None→default conversion)
 
 
 class Order(OrderBase, CdcOlapModelBase):
-    """Order OLAP model."""
+    """Order OLAP model. Override validation to allow defaults for delete events."""
     id: Annotated[int, "uint64"]
     status: Annotated[str, "LowCardinality"]
-    # Inherited: customerId, orderDate, total (auto None→default conversion)
+    total: Decimal = Field(ge=0, decimal_places=2)  # Remove gt=0 constraint, allow 0 for deletes
+    # Inherited: customerId, orderDate (auto None→default conversion)
 
 
 class OrderItem(OrderItemBase, CdcOlapModelBase):
@@ -182,10 +185,12 @@ class OrderItem(OrderItemBase, CdcOlapModelBase):
     OrderItem OLAP model.
 
     Note: uint8 for quantity (0-255). Use uint16/uint32 if quantities exceed 255.
+    Override validation constraints to allow defaults for delete events.
     """
     id: int
-    quantity: Annotated[int, "uint8"]
-    # Inherited: orderId, productId, price (auto None→default conversion)
+    quantity: Annotated[int, "uint8"] = Field(ge=0)  # Remove gt=0 constraint
+    price: float = Field(ge=0)  # Remove gt=0 constraint, allow 0 for deletes
+    # Inherited: orderId, productId (auto None→default conversion)
 
 
 

@@ -127,8 +127,8 @@ const getBackendPort = (envVarName: string, defaultPort: number): number => {
 
 ### 3. Documentation Updates
 Updated the following docs:
-- `TEST_CLIENT_PORT_CONFIG.md` - Added port variable table
-- `TEST_CLIENT_SETTINGS_UI.md` - Added backend port configuration section
+- `docs/port-configuration.md` - Added port variable table
+- `docs/settings-ui.md` - Added backend port configuration section
 - `README.md` - Added example of configuring custom ports
 
 ## Technical Details

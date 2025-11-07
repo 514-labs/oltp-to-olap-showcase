@@ -641,5 +641,5 @@ The architecture is production-ready but requires proper monitoring (DLQ alerts)
 ## Related Documentation
 
 - **[OLTP to OLAP Model Translation Guide](./OLTP_TO_OLAP_MODEL_TRANSLATION.md)** - Deep dive into Python/Pydantic features used for model transformation (inheritance, validators, Field defaults)
-- **[SQLALCHEMY_TO_OLAP_GUIDE.md](./SQLALCHEMY_TO_OLAP_GUIDE.md)** - General migration guide from SQLAlchemy to ClickHouse
-- **[WHY_SQLMODEL.md](./WHY_SQLMODEL.md)** - Why we use SQLModel for OLTP models
+- **[Setup Script Overview](./SETUP_SCRIPT.md)** - Step-by-step tour of `./setup.sh`
+- **[Repository Quick Start](../../docs/quickstart.md)** - Cross-project onboarding guide

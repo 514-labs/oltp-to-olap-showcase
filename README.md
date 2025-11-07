@@ -12,7 +12,7 @@ This repository demonstrates Change Data Capture (CDC) - the practice of streami
 
 1. **Learn the concepts** → Read [How It Works](#how-it-works) below
 2. **Try it immediately** → Follow [Quick Start](#quick-start) (5 minutes)
-3. **Understand the design** → See [CDC Pipeline Design](apps/typeorm-example/docs/CDC_PIPELINE_DESIGN.md)
+3. **Understand the design** → See [CDC Transformation Architecture](apps/sqlmodel-example/docs/CDC_TRANSFORMATION_ARCHITECTURE.md)
 4. **Test interactively** → Run the [Test Client](#test-the-pipeline) to see CDC in action
 
 ## What This Demonstrates
@@ -38,9 +38,8 @@ A complete, working example of an OLTP-to-OLAP CDC pipeline with:
 
 - ⚠️ **Drizzle Example** - Basic setup working (port 3003)
 - ⚠️ **Prisma Example** - Basic setup working (port 3004)
-- ⚠️ **Sequelize Example** - Basic setup working (port 3005)
 
-All five examples include interactive `setup.sh` scripts that guide you through CDC configuration step-by-step.
+Every example includes an interactive `setup.sh` script that guides you through CDC configuration step-by-step.
 
 ## Architecture
 
@@ -104,14 +103,15 @@ cd apps/typeorm-example
 # Set Redpanda license
 export REDPANDA_LICENSE="your_license_key_here"
 
-# Run interactive setup
+pnpm install
+# Run interactive setup (accept the prompt to run pnpm setup-db)
 ./setup.sh
 
-# Terminal 1: Start infrastructure (includes CDC connector)
+# Terminal 1: Start Moose (includes CDC connector)
 moose dev
 
-# Terminal 2: Start API
-pnpm start-oltp && pnpm dev
+# Terminal 2: Start the API server
+pnpm dev
 ```
 
 Visit http://localhost:3000 for API and http://localhost:3000/reference for docs.
@@ -129,14 +129,15 @@ python -m venv venv
 source venv/bin/activate
 pip install -e .
 
-# Run interactive setup
+# Run interactive setup (accept the prompt to run python init_db.py)
 ./setup.sh
 
-# Terminal 1: Start infrastructure (includes CDC connector)
+# Terminal 1: Start Moose (includes CDC connector)
 moose dev
 
-# Terminal 2: Start API
+# Terminal 2: Start API (run python init_db.py first if you skipped it)
 source venv/bin/activate
+# python init_db.py
 fastapi dev src/main.py --port 3002
 ```
 
@@ -167,18 +168,19 @@ See the [Test Client README](apps/test-client/README.md) for complete usage inst
 
 ### Getting Started
 
-- [TypeORM Example](apps/typeorm-example/README.md) - TypeScript/Node.js implementation (recommended for beginners)
-- [SQLModel Example](apps/sqlmodel-example/README.md) - Python/FastAPI implementation
-- [Test Client](apps/test-client/README.md) - Interactive UI for testing with backend switching
-- [Drizzle Example](apps/drizzle-example/README.md) - Experimental Drizzle ORM implementation
-- [Prisma Example](apps/prisma-example/README.md) - Experimental Prisma ORM implementation
-- [Sequelize Example](apps/sequelize-example/README.md) - Experimental Sequelize ORM implementation
+- [Quick Start Guide](docs/quickstart.md) - One-page onboarding for any ORM example
+- [Docker Setup Guide](docs/docker-guide.md) - Ports, containers, and commands
+- [TypeORM Example README](apps/typeorm-example/README.md) - TypeScript/Node.js implementation (recommended for beginners)
+- [SQLModel Example README](apps/sqlmodel-example/README.md) - Python/FastAPI implementation
+- [Drizzle Example README](apps/drizzle-example/README.md) - Experimental Drizzle ORM implementation
+- [Prisma Example README](apps/prisma-example/README.md) - Experimental Prisma ORM implementation
+- [Test Client README](apps/test-client/README.md) - Interactive React UI
 
 ### Architecture & Design
 
-- [CDC Pipeline Design](apps/typeorm-example/docs/CDC_PIPELINE_DESIGN.md) - Deep dive into how CDC works
-- [OLAP Conversion Guide](apps/typeorm-example/docs/OLAP_CONVERSION_GUIDE.md) - Patterns for converting ORM models to analytics tables
-- [TypeORM Setup Guide](apps/typeorm-example/docs/SETUP_GUIDE.md) - Detailed setup with troubleshooting tips
+- [CDC Transformation Architecture (SQLModel)](apps/sqlmodel-example/docs/CDC_TRANSFORMATION_ARCHITECTURE.md)
+- [OLTP → OLAP Model Translation (SQLModel)](apps/sqlmodel-example/docs/OLTP_TO_OLAP_MODEL_TRANSLATION.md)
+- [Setup Script Walkthrough (SQLModel)](apps/sqlmodel-example/docs/SETUP_SCRIPT.md)
 
 ## Project Structure
 
@@ -187,13 +189,14 @@ oltp-to-olap-showcase/
 ├── apps/
 │   ├── typeorm-example/       # ✅ TypeScript/Node.js (port 3000)
 │   │   ├── src/               # TypeORM entities & Express API
-│   │   ├── app/               # Moose OLAP tables & transformations
-│   │   ├── docs/              # Architecture guides
+│   │   ├── moose/             # Moose OLAP tables & transformations
+│   │   ├── config/            # Moose configuration helpers
 │   │   └── setup.sh           # Interactive CDC setup script
 │   │
 │   ├── sqlmodel-example/      # ✅ Python/FastAPI (port 3002)
 │   │   ├── src/               # SQLModel models & FastAPI
-│   │   ├── app/               # Moose OLAP tables & transformations
+│   │   ├── moose/             # Moose OLAP tables & transformations
+│   │   ├── docs/              # Architecture & setup guides
 │   │   └── setup.sh           # Interactive CDC setup script
 │   │
 │   ├── drizzle-example/       # ⚠️ Experimental (port 3003)
@@ -202,19 +205,20 @@ oltp-to-olap-showcase/
 │   ├── prisma-example/        # ⚠️ Experimental (port 3004)
 │   │   └── setup.sh           # Interactive CDC setup script
 │   │
-│   ├── sequelize-example/     # ⚠️ Experimental (port 3005)
-│   │   └── setup.sh           # Interactive CDC setup script
-│   │
 │   └── test-client/           # ✅ React UI (port 3001)
 │       ├── src/
 │       │   ├── components/    # Settings modal for backend switching
 │       │   └── contexts/      # API context for dynamic URL management
+│       ├── docs/              # Settings UI & environment configuration notes
 │       └── README.md          # Test client documentation
 │
-└── README.md                  # This file
+├── packages/
+│   └── shared/                # Shared middleware, types, and utilities
+│
+└── docs/                      # Centralized guides & troubleshooting
 ```
 
-**All five ORM examples** include interactive `setup.sh` scripts that guide you through CDC configuration.
+**All examples** include interactive `setup.sh` scripts that guide you through CDC configuration.
 
 ## How It Works
 
@@ -327,7 +331,6 @@ ORDER BY revenue DESC;
 | SQLModel  | Python     | SQLModel (SQLAlchemy 2.0 + Pydantic) | FastAPI          | 3002 |
 | Drizzle   | TypeScript | Drizzle                              | Express          | 3003 |
 | Prisma    | TypeScript | Prisma                               | Express          | 3004 |
-| Sequelize | TypeScript | Sequelize                            | Express          | 3005 |
 
 **Test Client:**
 
@@ -359,7 +362,7 @@ Contributions are welcome! This is an educational project demonstrating CDC patt
 
 - 🐛 **Bug fixes** - Improvements to existing TypeORM and SQLModel examples
 - 📚 **Documentation** - Clarify setup instructions, add troubleshooting tips
-- 🔧 **Experimental ORMs** - Help stabilize Drizzle, Prisma, and Sequelize examples
+- 🔧 **Experimental ORMs** - Help stabilize the Drizzle and Prisma examples
 - ⚡ **Performance** - Optimize transformations and data flow
 - 🧪 **Test scenarios** - Add new features to test client (filters, charts, etc.)
 - 🎨 **UI improvements** - Enhance test client user experience
@@ -401,13 +404,13 @@ MIT
 **Three ways to explore this project:**
 
 1. **Quick Test** - Follow [Quick Start](#quick-start) above for a 5-minute setup
-2. **Deep Dive** - Read [CDC Pipeline Design](apps/typeorm-example/docs/CDC_PIPELINE_DESIGN.md) to understand the architecture
+2. **Deep Dive** - Review the SQLModel architecture docs under `apps/sqlmodel-example/docs`
 3. **Interactive Learning** - Run `./setup.sh` in any example directory for guided CDC configuration
 
 **Choose your ORM:**
 
 - [TypeORM](apps/typeorm-example/README.md) - TypeScript/Node.js (recommended for beginners)
 - [SQLModel](apps/sqlmodel-example/README.md) - Python/FastAPI
-- [Drizzle](apps/drizzle-example/README.md), [Prisma](apps/prisma-example/README.md), [Sequelize](apps/sequelize-example/README.md) - Experimental
+- [Drizzle](apps/drizzle-example/README.md) and [Prisma](apps/prisma-example/README.md) - Experimental setups ready for contributions
 
 **Then test with:** [Test Client](apps/test-client/README.md) - Interactive UI to see CDC in real-time

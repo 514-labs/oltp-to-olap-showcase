@@ -130,7 +130,6 @@ This confirms which backend the client is configured to use.
 | SQLModel   | 3002         | `VITE_API_URL=http://localhost:3002` | `VITE_SQLMODEL_PORT=3002`  |
 | Drizzle    | 3003         | `VITE_API_URL=http://localhost:3003` | `VITE_DRIZZLE_PORT=3003`   |
 | Prisma     | 3004         | `VITE_API_URL=http://localhost:3004` | `VITE_PRISMA_PORT=3004`    |
-| Sequelize  | 3005         | `VITE_API_URL=http://localhost:3005` | `VITE_SEQUELIZE_PORT=3005` |
 
 **Port Configuration:**
 - `VITE_API_URL` - Sets the initial API URL

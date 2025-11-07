@@ -38,6 +38,10 @@ services:
     environment:
       REDPANDA_LICENSE: ${REDPANDA_LICENSE:-}
       POSTGRES_CDC_DSN: "postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@${APP_NAME:-sqlmodel}-postgres:5432/${POSTGRES_DB:-sqlmodel_db}?sslmode=disable"
+      POSTGRES_CDC_SCHEMA: ${POSTGRES_CDC_SCHEMA:-public}
+      POSTGRES_CDC_SLOT: ${POSTGRES_CDC_SLOT:-redpanda_cdc_slot}
+      POSTGRES_CDC_TABLES: ${POSTGRES_CDC_TABLES:-["customer","product","order","orderitem"]}
+      POSTGRES_CDC_TOPIC: ${POSTGRES_CDC_TOPIC:-sqlmodel_cdc_events}
       LOG_LEVEL: "info"
     networks:
       - default

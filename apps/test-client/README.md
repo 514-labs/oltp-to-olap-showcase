@@ -8,7 +8,7 @@ Interactive React UI for testing the OLTP-to-OLAP CDC pipeline. Create customers
 - Create complex orders with multiple items
 - Update existing orders and track CDC events
 - Delete records and verify pipeline handling
-- Works with both TypeORM and SQLAlchemy backends
+- Works with both TypeORM and SQLModel backends
 
 ## Prerequisites
 
@@ -19,30 +19,38 @@ Interactive React UI for testing the OLTP-to-OLAP CDC pipeline. Create customers
 ```bash
 cd apps/typeorm-example
 
-# Terminal 1: Start infrastructure
+# Terminal 1: Install deps and run setup (accept the prompt to run pnpm setup-db)
+pnpm install
 export REDPANDA_LICENSE="your_license_here"
+./setup.sh
+
+# Terminal 2: Start Moose (Redpanda Connect + ClickHouse sinks)
 moose dev
 
-# Terminal 2: Start API
-pnpm start-oltp && pnpm dev
+# Terminal 3: Start API
+pnpm dev
 ```
 
 Verify: http://localhost:3000
 
-### Option 2: SQLAlchemy Backend (Port 3002)
+### Option 2: SQLModel Backend (Port 3002)
 
 ```bash
 cd apps/sqlmodel-example
 
-# Terminal 1: Start PostgreSQL
-./start-oltp.sh
-
-# Terminal 2: Start infrastructure
+# Terminal 1: Prepare virtualenv, install deps, run setup
+python -m venv venv
+source venv/bin/activate
+pip install -e .
 export REDPANDA_LICENSE="your_license_here"
+./setup.sh
+
+# Terminal 2: Start Moose (Redpanda Connect + ClickHouse sinks)
 moose dev
 
-# Terminal 3: Start API
+# Terminal 3: Start API (run python init_db.py if you skipped it)
 source venv/bin/activate
+# python init_db.py
 fastapi dev src/main.py --port 3002
 ```
 
@@ -314,8 +322,8 @@ Built files output to `dist/` directory.
 
 - [Main README](../../README.md) - Project overview
 - [TypeORM Example](../typeorm-example/README.md) - TypeScript implementation
-- [SQLAlchemy Example](../sqlmodel-example/README.md) - Python implementation
-- [CDC Pipeline Design](../typeorm-example/docs/CDC_PIPELINE_DESIGN.md) - Architecture deep dive
+- [SQLModel Example](../sqlmodel-example/README.md) - Python implementation
+- [CDC Transformation Architecture](../sqlmodel-example/docs/CDC_TRANSFORMATION_ARCHITECTURE.md) - Stream routing deep dive
 
 ### Extend the Client
 

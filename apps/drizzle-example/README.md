@@ -20,4 +20,4 @@ Interested in helping complete this example? Check the [main README](../../READM
 
 **Looking for working examples?**
 - [TypeORM Example](../typeorm-example/README.md) - TypeScript/Node.js (Production Ready)
-- [SQLAlchemy Example](../sqlmodel-example/README.md) - Python/FastAPI (Production Ready)
+- [SQLModel Example](../sqlmodel-example/README.md) - Python/FastAPI (Production Ready)

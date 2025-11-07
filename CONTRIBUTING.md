@@ -50,12 +50,13 @@ This project follows standard open-source community guidelines:
    pnpm run build
    ```
 
-5. Run examples to verify:
+5. Run an example to verify the workspace:
    ```bash
-   # Prisma example
-   cd apps/prisma-example
-   pnpm run prisma:generate
-   pnpm run dev
+   # TypeORM example (production-ready)
+   cd apps/typeorm-example
+   pnpm install
+   pnpm setup-db
+   pnpm dev
    ```
 
 ## Development Workflow
@@ -117,24 +118,25 @@ pnpm run format
 pnpm run clean
 
 # Run specific package
-pnpm --filter @oltp-olap/prisma-example run dev
+pnpm --filter example-typeorm-to-olap run dev
 ```
 
 ## Project Structure
 
 ```
 oltp-to-olap-showcase/
-├── packages/
-│   └── shared/              # Core transformation utilities
 ├── apps/
 │   ├── prisma-example/      # Prisma ORM example
 │   ├── drizzle-example/     # Drizzle ORM example
 │   ├── typeorm-example/     # TypeORM example
-│   └── sequelize-example/   # Sequelize example
-├── ARCHITECTURE.md          # Architecture documentation
+│   ├── sqlmodel-example/    # SQLModel/FastAPI example
+│   └── test-client/         # React UI for exercising the pipeline
+├── packages/
+│   └── shared/              # Shared middleware, routes, and OLAP helpers
 ├── CONTRIBUTING.md          # This file
-├── README.md               # Project overview
-└── package.json            # Root package configuration
+├── README.md                # Project overview
+├── docs/                    # Quick-start and troubleshooting guides
+└── package.json             # Root workspace configuration
 ```
 
 ## Adding a New ORM Example
@@ -328,54 +330,32 @@ static transformToDimension(
 
 ## Testing
 
-Currently, the project uses runnable examples as demonstrations. To add formal tests:
+The repository relies on runnable examples as demonstrations today. If you add automated tests:
 
-### Unit Tests
+- Keep them scoped to the package you are modifying (e.g., `packages/shared`).
+- Add a `test` script to that package's `package.json` (Vitest is already in the toolchain for TypeScript packages).
+- Run the tests with `pnpm --filter <package-name> test`.
 
-For shared utilities:
+Example Vitest skeleton:
+
 ```typescript
-import { describe, test, expect } from 'vitest';
-import { OLAPTransformer } from '../src';
+import { describe, expect, it } from 'vitest';
+import { transformToDimension } from '../src';
 
-describe('OLAPTransformer', () => {
-  test('transformToDimension extracts specified attributes', () => {
-    const records = [{ id: 1, name: 'Alice', age: 30 }];
-    const config = {
-      name: 'customer',
-      sourceTable: 'Customer',
-      keyField: 'id',
-      attributes: ['name']
-    };
-
-    const result = OLAPTransformer.transformToDimension(records, config);
+describe('transformToDimension', () => {
+  it('extracts specified attributes', () => {
+    const result = transformToDimension(
+      [{ id: 1, name: 'Alice', age: 30 }],
+      { name: 'customer', sourceTable: 'Customer', keyField: 'id', attributes: ['name'] }
+    );
 
     expect(result).toHaveLength(1);
-    expect(result[0].dimensionKey).toBe('1');
     expect(result[0].attributes).toEqual({ name: 'Alice' });
   });
 });
 ```
 
-### Integration Tests
-
-For ORM examples, test the full flow:
-1. Seed data
-2. Extract via ORM
-3. Transform to OLAP
-4. Verify output structure
-
-### Running Tests
-
-```bash
-# Run all tests
-pnpm test
-
-# Run tests for specific package
-pnpm --filter @oltp-olap/shared test
-
-# Run tests in watch mode
-pnpm test --watch
-```
+For end-to-end verification continue to rely on the runnable examples: seed data, trigger CDC, and inspect ClickHouse output.
 
 ## Documentation
 
@@ -393,7 +373,7 @@ pnpm test --watch
 
 ### Architecture Documentation
 
-When making architectural changes, update `ARCHITECTURE.md`:
+When making architectural changes, update the relevant markdown in `docs/` or the project-specific README. Capture:
 - Design decisions and rationale
 - Trade-offs considered
 - Impacts on existing code

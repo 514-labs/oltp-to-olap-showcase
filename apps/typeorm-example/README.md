@@ -16,7 +16,7 @@ Transform TypeORM entities into denormalized OLAP tables with real-time CDC repl
 
 ## 🚀 Quick Start
 
-⚠️ **Requires [Redpanda Enterprise License](./docs/LICENSE_SETUP.md)** - Free 30-day trial available
+⚠️ **Requires a Redpanda Enterprise License** — grab a free 30-day trial at [redpanda.com/try-enterprise](https://redpanda.com/try-enterprise)
 
 ### 1. Set License
 
@@ -24,36 +24,39 @@ Transform TypeORM entities into denormalized OLAP tables with real-time CDC repl
 export REDPANDA_LICENSE="your_license_key_here"
 ```
 
-### 2. Start Infrastructure
+### 2. Install dependencies
 
 ```bash
-# Terminal 1: Start Moose (keeps running)
+pnpm install
+```
+
+### 3. Run the setup script
+
+```bash
+# Terminal 1: Start PostgreSQL and configure CDC (interactive)
+./setup.sh
+```
+
+The script brings up PostgreSQL, walks you through running `pnpm setup-db`, and configures the CDC publication and replication slot.
+
+### 4. Start Moose (CDC pipeline) and the API
+
+```bash
+# Terminal 2: Start Moose (brings up Redpanda Connect + ClickHouse sinks)
 moose dev
+
+# Terminal 3: Start the API server (keeps running)
+pnpm dev
 ```
 
-**Expected:** `⏳ Waiting for tables to be created by TypeORM API...`
+You should see Moose log CDC activity as you interact with the API.
 
-### 3. Start OLTP Application
-
-```bash
-# Terminal 2: Start PostgreSQL and API
-pnpm start-oltp  # Starts PostgreSQL
-pnpm dev         # Starts API server
-```
-
-**What happens:**
-
-- PostgreSQL starts with logical replication enabled
-- Tables created via TypeORM
-- CDC publication created automatically
-- Redpanda Connect starts streaming changes
-- ✨ Your CDC pipeline is live!
-
-### 4. Test the Pipeline
+### 5. Test the Pipeline
 
 ```bash
-# Terminal 3: Start test client (optional)
+# Terminal 4: Start test client (optional)
 cd ../test-client
+pnpm install
 pnpm dev
 ```
 
@@ -78,7 +81,7 @@ curl -X POST http://localhost:3000/api/orders \
   -d '{"customerId": 1, "status": "pending", "total": 999.99}'
 ```
 
-### 5. Query ClickHouse
+### 6. Query ClickHouse
 
 ```bash
 # Connect to ClickHouse
@@ -90,18 +93,10 @@ SELECT * FROM local.order_fact LIMIT 10;
 
 ## 📖 Documentation
 
-### Essential Guides
-
-- **[Quick Start](docs/MOOSE_CDC_QUICKSTART.md)** - Get running in 5 minutes
-- **[License Setup](LICENSE_SETUP.md)** - Get your Redpanda license
-- **[Complete Setup Guide](docs/SETUP_GUIDE.md)** - Detailed setup with troubleshooting
-
-### Architecture & Design
-
-- **[CDC Pipeline Design](docs/CDC_PIPELINE_DESIGN.md)** - How the CDC pipeline works
-- **[OLAP Conversion Guide](docs/OLAP_CONVERSION_GUIDE.md)** - TypeORM → Moose patterns
-- **[Fact Table Strategy](docs/FACT_TABLE_STRATEGY.md)** - Denormalization patterns
-- **[Documentation Index](docs/README.md)** - All documentation
+- [Repository Quick Start](../../docs/quickstart.md) — End-to-end setup across projects
+- [Docker Setup Guide](../../docs/docker-guide.md) — Ports, containers, and common commands
+- [Troubleshooting Guide](../../TROUBLESHOOTING.md) — Common CDC issues and fixes
+- [Test Client README](../test-client/README.md) — Drive writes and watch CDC in action
 
 ## 🏗️ Project Structure
 
@@ -117,20 +112,24 @@ typeorm-example/
 │   ├── openapi.ts          # OpenAPI specification
 │   └── setup-db.ts         # Database initialization
 │
-├── app/
-│   ├── index.ts            # Moose OLAP table definitions
-│   └── streams/            # (Auto-generated streaming functions)
+├── moose/
+│   ├── index.ts            # Moose entry point (exports sources/transforms/sinks)
+│   ├── transformations.ts  # CDC event routing and processing
+│   ├── sinkTables.ts       # ClickHouse table definitions
+│   ├── sinkTopics.ts       # Moose streams into ClickHouse
+│   ├── materializedViews.ts# Optional enrichment views
+│   └── sources/            # Auto-generated Redpanda topics
 │
-├── docs/                   # Complete documentation
+├── config/                 # Moose dynamic config templates
 │
 ├── docker-compose.oltp.yaml           # PostgreSQL service
 ├── docker-compose.dev.override.yaml   # CDC services
 ├── redpanda-connect.yaml              # CDC configuration
 ├── moose.config.toml                  # Moose settings
 │
-├── start-oltp.sh           # Start OLTP (PostgreSQL + setup)
-├── moose-cdc-setup.sh      # CDC setup hook (auto-run by Moose)
-└── init-postgres.sh        # PostgreSQL init (auto-run by Docker)
+├── setup.sh                # Interactive CDC setup script
+├── Makefile                # Convenient aliases for setup.sh
+└── package.json            # Example scripts and dependencies
 ```
 
 ## 🎓 How It Works
@@ -158,19 +157,12 @@ export class Order {
 ### Moose OLAP Tables
 
 ```typescript
-// app/index.ts
-export interface OrderFact {
-  order_id: UInt64;
-  customer_id: UInt64;
-  customer_name: string; // Denormalized!
-  customer_email: string; // Denormalized!
-  status: string;
-  total: Float64;
-  order_date: DateTime;
-}
-
-export const OrderFact = new OlapTable<OrderFact>('order_fact', {
-  orderByFields: ['order_date', 'order_id'],
+// moose/sinkTables.ts
+export const OrderItemTable = new OlapTable<OrderItemFact & CdcFields>('fact_order_item', {
+  orderByFields: ['id', 'orderId', 'productId'],
+  engine: ClickHouseEngines.ReplacingMergeTree,
+  ver: 'lsn',
+  isDeleted: 'is_deleted',
 });
 ```
 
@@ -186,7 +178,7 @@ Order              Capture           Stream            Transform         Insert
 
 ### "Waiting for tables" persists
 
-**Solution:** Run `pnpm dev` to start the API and create tables
+**Solution:** Run `pnpm setup-db` to create tables, then restart `pnpm dev`
 
 ### Redpanda Connect won't start
 
@@ -194,11 +186,11 @@ Order              Capture           Stream            Transform         Insert
 
 ### Publication errors
 
-**Solution:** See [Troubleshooting Guide](docs/SETUP_GUIDE.md#troubleshooting)
+**Solution:** See the [repository Troubleshooting Guide](../../TROUBLESHOOTING.md)
 
 ### More issues?
 
-Check the **[Complete Setup Guide](docs/SETUP_GUIDE.md)** for detailed troubleshooting.
+Check the [repo Troubleshooting Guide](../../TROUBLESHOOTING.md) for detailed diagnostics or open an issue with logs from `./setup.sh status`.
 
 ## 🔗 Useful Links
 
@@ -216,11 +208,11 @@ Check the **[Complete Setup Guide](docs/SETUP_GUIDE.md)** for detailed troublesh
 ## 📦 Available Scripts
 
 ```bash
-pnpm start-oltp    # Start PostgreSQL
-pnpm stop-oltp     # Stop PostgreSQL
-pnpm setup-db      # Initialize database tables
-pnpm dev           # Start API server (dev mode)
-pnpm build         # Build TypeScript
+pnpm setup-db   # Initialize database tables using TypeORM entities
+pnpm dev        # Start API server (dev mode)
+pnpm build      # Build TypeScript output
+pnpm clean      # Remove build artifacts
+moose dev       # Start Moose (from this directory)
 ```
 
 ## 🛠️ Technology Stack
@@ -242,4 +234,4 @@ pnpm build         # Build TypeScript
 
 ---
 
-**Need help?** Check the **[Documentation Index](docs/README.md)** or open an issue.
+**Need help?** Check the **[Documentation Index](../../docs/README.md)** or open an issue.

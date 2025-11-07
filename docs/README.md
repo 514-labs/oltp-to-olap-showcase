@@ -9,9 +9,9 @@ Central documentation hub for the OLTP-to-OLAP CDC Showcase.
 
 ## Test Client
 
-- **[Port Configuration](./test-client/port-configuration.md)** - Configure API endpoints
-- **[Settings UI](./test-client/settings-ui.md)** - In-app settings modal
-- **[Environment Variables](./test-client/environment-variables.md)** - Env var reference
+- **[Port Configuration](../apps/test-client/docs/port-configuration.md)** - Configure API endpoints
+- **[Settings UI](../apps/test-client/docs/settings-ui.md)** - In-app settings modal
+- **[Environment Variables](../apps/test-client/docs/environment-variables.md)** - Env var reference
 
 ## Project-Specific Documentation
 
@@ -20,7 +20,6 @@ Each project has its own detailed README:
 - [SQLModel Example](../apps/sqlmodel-example/README.md)
 - [Drizzle Example](../apps/drizzle-example/README.md)
 - [Prisma Example](../apps/prisma-example/README.md)
-- [Sequelize Example](../apps/sequelize-example/README.md)
 - [Test Client](../apps/test-client/README.md)
 
 ## Support Documentation
@@ -31,10 +30,6 @@ Each project has its own detailed README:
 ## Templates
 
 - **[Template Directory](../templates/)** - Reusable templates for setup scripts
-
-## Archive
-
-- **[Archived Docs](./archive/)** - Historical documentation (reference only)
 
 ## Document Standards
 

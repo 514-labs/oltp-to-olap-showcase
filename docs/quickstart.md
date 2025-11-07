@@ -18,7 +18,6 @@ Pick the ORM that matches your stack:
 | Python | [sqlmodel-example](../apps/sqlmodel-example/) | FastAPI/Python developers |
 | TypeScript | [drizzle-example](../apps/drizzle-example/) | Modern TypeScript |
 | TypeScript | [prisma-example](../apps/prisma-example/) | Prisma users |
-| JavaScript | [sequelize-example](../apps/sequelize-example/) | Sequelize users |
 
 ## Setup (Any Project)
 
@@ -31,12 +30,14 @@ cd apps/typeorm-example  # or any other project
 # 2. Set Redpanda license
 export REDPANDA_LICENSE="your_license_key_here"
 
-# 3. Run interactive setup
+# 3. Install project dependencies (pnpm install, pip install -e ., etc.)
+
+# 4. Run interactive setup
 ./setup.sh
 
 # The script will guide you through:
 #  ✓ Starting PostgreSQL
-#  ✓ Waiting for tables
+#  ✓ Waiting for tables (with an optional prompt to run your migration command)
 #  ✓ Configuring CDC
 #  ✓ Verifying setup
 ```
@@ -51,17 +52,21 @@ moose dev
 ```
 
 ### 2. Start Your Application
-**TypeScript (TypeORM/Drizzle/Prisma/Sequelize):**
+**TypeORM (TypeScript, recommended path):**
 ```bash
-pnpm install
+pnpm install   # If you haven't already
 pnpm dev
 ```
 
-**Python (SQLModel):**
+**SQLModel (Python):**
 ```bash
+python -m venv venv
 source venv/bin/activate
+pip install -e .   # If you haven't already
 fastapi dev src/main.py --port 3002
 ```
+
+**Other TypeScript experiments (Drizzle/Prisma):** follow the project-specific README under `apps/<project>-example/`.
 
 ### 3. Test the Pipeline
 ```bash
@@ -108,8 +113,8 @@ Each project has detailed documentation:
 
 ## Learn More
 
-- [Architecture Overview](./architecture.md) - How it all works
 - [Docker Guide](./docker-guide.md) - Docker setup details
+- [SQLModel CDC Architecture](../apps/sqlmodel-example/docs/CDC_TRANSFORMATION_ARCHITECTURE.md)
 - [Contributing](../CONTRIBUTING.md) - How to contribute
 
 ---
